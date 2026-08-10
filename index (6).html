@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <title>Hare Krishna AI</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+
+      <div class="sidebar-top">
+        <button class="new-chat-btn" id="newChatBtn">
+          <span class="plus">+</span>
+          <span>New chat</span>
+        </button>
+      </div>
+
+      <div class="chat-list-wrap">
+        <div class="chat-list-title">Your chats</div>
+        <div id="chatList" class="chat-list"></div>
+      </div>
+
+      <div class="sidebar-bottom">
+        <button class="side-btn" id="exportAllBtn">
+          ⇩ <span>Export all chats</span>
+        </button>
+
+        <button class="side-btn danger" id="deleteAllBtn">
+          ⌫ <span>Delete all chats</span>
+        </button>
+      </div>
+
+    </aside>
+
+
+    <!-- MAIN AREA -->
+    <main class="main">
+
+      <!-- TOP BAR -->
+      <header class="topbar">
+
+        <button
+          class="icon-btn menu-btn"
+          id="menuBtn"
+          aria-label="Open menu">
+          ☰
+        </button>
+
+        <div class="brand">
+          <div class="brand-mark">✦</div>
+
+          <div>
+            <div class="brand-name">AI</div>
+            <div class="brand-sub">Assistant</div>
+          </div>
+        </div>
+
+        <div class="top-actions">
+
+          <button
+            class="icon-btn"
+            id="shareBtn"
+            title="Share current chat">
+            ↗
+          </button>
+
+          <button
+            class="icon-btn"
+            id="themeBtn"
+            title="Toggle theme">
+            ☾
+          </button>
+
+        </div>
+
+      </header>
+
+
+      <!-- CHAT AREA -->
+      <section class="chat-area" id="chatArea">
+
+        <!-- WELCOME SCREEN -->
+        <div class="welcome" id="welcome">
+
+          <div class="welcome-icon">
+            ✦
+          </div>
+
+          <h1>
+            How can I help you?
+          </h1>
+
+          <p>
+            Ask a question, explain a topic, brainstorm an idea,
+            or start something new.
+          </p>
+
+
+          <!-- SUGGESTIONS -->
+          <div class="suggestions">
+
+            <button class="suggestion">
+              Explain photosynthesis simply
+            </button>
+
+            <button class="suggestion">
+              Help me solve an algebra problem
+            </button>
+
+            <button class="suggestion">
+              Give me ideas for a website
+            </button>
+
+            <button class="suggestion">
+              Teach me something interesting
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <!-- MESSAGES -->
+        <div id="messages" class="messages"></div>
+
+      </section>
+
+
+      <!-- MESSAGE COMPOSER -->
+      <section class="composer-area">
+
+        <div class="composer">
+
+          <textarea
+            id="messageInput"
+            rows="1"
+            placeholder="Message AI..."
+            aria-label="Message AI"></textarea>
+
+          <button
+            id="sendBtn"
+            class="send-btn"
+            title="Send message"
+            aria-label="Send message">
+            ↑
+          </button>
+
+        </div>
+
+        <div class="composer-note">
+          AI responses in this first version are local demo responses.
+          Connect a real AI API for full model intelligence.
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+
+  <!-- MOBILE OVERLAY -->
+  <div class="overlay" id="overlay"></div>
+
+
+  <!-- SHARE MODAL -->
+  <div class="modal hidden" id="shareModal">
+
+    <div class="modal-card">
+
+      <button
+        class="modal-close"
+        data-close="shareModal">
+        ×
+      </button>
+
+      <h2>
+        Share chat
+      </h2>
+
+      <p>
+        Copy the current conversation as text.
+      </p>
+
+      <textarea
+        id="shareText"
+        readonly></textarea>
+
+      <button
+        class="primary-btn"
+        id="copyShareBtn">
+        Copy chat
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- TOAST NOTIFICATION -->
+  <div
+    class="toast"
+    id="toast">
+  </div>
+
+
+  <!-- JAVASCRIPT -->
+  <script src="app.js"></script>
+
+</body>
+</html>
