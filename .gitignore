@@ -1,0 +1,24 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Build files
+dist/
+build/
+
+# Vercel
+.vercel/
+
+# Firebase local files
+.firebase/
+
+# Logs
+*.log
+
+# System files
+.DS_Store
+Thumbs.db
