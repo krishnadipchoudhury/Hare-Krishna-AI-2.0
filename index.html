@@ -4,78 +4,355 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Hare Krishna AI - Your personal AI assistant">
   <title>Hare Krishna AI</title>
 
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-  <div class="app">
+
+  <!-- =====================================================
+       AUTHENTICATION SCREEN
+       ===================================================== -->
+
+  <div id="authScreen" class="auth-screen">
+
+    <div class="auth-card">
+
+      <!-- AI LOGO -->
+      <div class="auth-logo" aria-hidden="true">
+        <span>✦</span>
+      </div>
+
+      <h1 class="auth-title">Welcome to AI</h1>
+
+      <p class="auth-subtitle">
+        Sign in to save your chats and personal AI memory.
+      </p>
+
+
+      <!-- GOOGLE LOGIN -->
+
+      <button
+        id="googleLoginBtn"
+        class="google-login-btn"
+        type="button">
+
+        <span class="google-logo" aria-hidden="true">
+
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg">
+
+            <path
+              fill="#4285F4"
+              d="M21.35 12.27c0-.79-.07-1.55-.2-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42z"/>
+
+            <path
+              fill="#34A853"
+              d="M12 21.5c2.63 0 4.84-.87 6.45-2.35l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.53A9.75 9.75 0 0 0 12 21.5z"/>
+
+            <path
+              fill="#FBBC05"
+              d="M6.54 13.59A5.86 5.86 0 0 1 6.23 12c0-.55.1-1.08.31-1.59V7.88H3.3A9.5 9.5 0 0 0 2.25 12c0 1.53.37 2.97 1.05 4.12l3.24-2.53z"/>
+
+            <path
+              fill="#EA4335"
+              d="M12 6.38c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.48 14.63 2.5 12 2.5a9.75 9.75 0 0 0-8.7 5.38l3.24 2.53C7.31 8.1 9.46 6.38 12 6.38z"/>
+
+          </svg>
+
+        </span>
+
+        <span>Continue with Google</span>
+
+      </button>
+
+
+      <!-- DIVIDER -->
+
+      <div class="auth-divider">
+
+        <span></span>
+
+        <strong>or</strong>
+
+        <span></span>
+
+      </div>
+
+
+      <!-- EMAIL -->
+
+      <input
+        id="emailInput"
+        class="auth-input"
+        type="email"
+        placeholder="Email address"
+        autocomplete="email">
+
+
+      <!-- PASSWORD -->
+
+      <input
+        id="passwordInput"
+        class="auth-input"
+        type="password"
+        placeholder="Password"
+        autocomplete="current-password">
+
+
+      <!-- SIGN IN -->
+
+      <button
+        id="signInBtn"
+        class="auth-primary-btn"
+        type="button">
+
+        Sign in
+
+      </button>
+
+
+      <!-- CREATE ACCOUNT -->
+
+      <div class="auth-create">
+
+        <span>Don't have an account?</span>
+
+        <button
+          id="createAccountBtn"
+          class="auth-link-btn"
+          type="button">
+
+          Create account
+
+        </button>
+
+      </div>
+
+
+      <!-- FORGOT PASSWORD -->
+
+      <button
+        id="forgotPasswordBtn"
+        class="forgot-btn"
+        type="button">
+
+        Forgot password?
+
+      </button>
+
+
+      <!-- CONTINUE WITHOUT LOGIN -->
+
+      <button
+        id="guestBtn"
+        class="guest-btn"
+        type="button">
+
+        Continue without login
+
+      </button>
+
+
+      <!-- AUTH STATUS -->
+
+      <div
+        id="authMessage"
+        class="auth-message"
+        role="status"
+        aria-live="polite">
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       MAIN AI APPLICATION
+       ===================================================== -->
+
+  <div id="appScreen" class="app hidden">
 
     <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
+
+    <aside
+      class="sidebar"
+      id="sidebar">
 
       <div class="sidebar-top">
-        <button class="new-chat-btn" id="newChatBtn">
+
+        <button
+          class="new-chat-btn"
+          id="newChatBtn"
+          type="button">
+
           <span class="plus">+</span>
+
           <span>New chat</span>
+
         </button>
+
       </div>
+
 
       <div class="chat-list-wrap">
-        <div class="chat-list-title">Your chats</div>
-        <div id="chatList" class="chat-list"></div>
+
+        <div class="chat-list-title">
+          Your chats
+        </div>
+
+        <div
+          id="chatList"
+          class="chat-list">
+        </div>
+
       </div>
 
+
       <div class="sidebar-bottom">
-        <button class="side-btn" id="exportAllBtn">
-          ⇩ <span>Export all chats</span>
+
+        <!-- USER ACCOUNT -->
+
+        <div
+          id="userPanel"
+          class="user-panel">
+
+          <div
+            id="userAvatar"
+            class="user-avatar">
+            ?
+          </div>
+
+          <div class="user-info">
+
+            <div
+              id="userName"
+              class="user-name">
+              Guest
+            </div>
+
+            <div
+              id="userEmail"
+              class="user-email">
+              Not signed in
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <button
+          class="side-btn"
+          id="exportAllBtn"
+          type="button">
+
+          ⇩
+          <span>Export all chats</span>
+
         </button>
 
-        <button class="side-btn danger" id="deleteAllBtn">
-          ⌫ <span>Delete all chats</span>
+
+        <button
+          class="side-btn"
+          id="deleteAllBtn"
+          type="button">
+
+          ⌫
+          <span>Delete all chats</span>
+
         </button>
+
+
+        <button
+          class="side-btn logout-btn"
+          id="logoutBtn"
+          type="button">
+
+          ⇥
+          <span>Sign out</span>
+
+        </button>
+
       </div>
 
     </aside>
 
 
-    <!-- MAIN AREA -->
+    <!-- MAIN -->
+
     <main class="main">
 
       <!-- TOP BAR -->
+
       <header class="topbar">
 
         <button
           class="icon-btn menu-btn"
           id="menuBtn"
+          type="button"
           aria-label="Open menu">
+
           ☰
+
         </button>
 
+
         <div class="brand">
-          <div class="brand-mark">✦</div>
+
+          <div
+            class="brand-mark"
+            aria-hidden="true">
+
+            ✦
+
+          </div>
+
 
           <div>
-            <div class="brand-name">AI</div>
-            <div class="brand-sub">Assistant</div>
+
+            <div class="brand-name">
+              Hare Krishna AI
+            </div>
+
+            <div class="brand-sub">
+              Assistant
+            </div>
+
           </div>
+
         </div>
+
 
         <div class="top-actions">
 
           <button
             class="icon-btn"
             id="shareBtn"
-            title="Share current chat">
+            type="button"
+            title="Share current chat"
+            aria-label="Share current chat">
+
             ↗
+
           </button>
+
 
           <button
             class="icon-btn"
             id="themeBtn"
-            title="Toggle theme">
+            type="button"
+            title="Toggle theme"
+            aria-label="Toggle theme">
+
             ☾
+
           </button>
 
         </div>
@@ -84,18 +361,31 @@
 
 
       <!-- CHAT AREA -->
-      <section class="chat-area" id="chatArea">
 
-        <!-- WELCOME SCREEN -->
-        <div class="welcome" id="welcome">
+      <section
+        class="chat-area"
+        id="chatArea">
 
-          <div class="welcome-icon">
+
+        <!-- WELCOME -->
+
+        <div
+          class="welcome"
+          id="welcome">
+
+          <div
+            class="welcome-icon"
+            aria-hidden="true">
+
             ✦
+
           </div>
+
 
           <h1>
             How can I help you?
           </h1>
+
 
           <p>
             Ask a question, explain a topic, brainstorm an idea,
@@ -103,23 +393,41 @@
           </p>
 
 
-          <!-- SUGGESTIONS -->
           <div class="suggestions">
 
-            <button class="suggestion">
+            <button
+              class="suggestion"
+              type="button">
+
               Explain photosynthesis simply
+
             </button>
 
-            <button class="suggestion">
+
+            <button
+              class="suggestion"
+              type="button">
+
               Help me solve an algebra problem
+
             </button>
 
-            <button class="suggestion">
+
+            <button
+              class="suggestion"
+              type="button">
+
               Give me ideas for a website
+
             </button>
 
-            <button class="suggestion">
+
+            <button
+              class="suggestion"
+              type="button">
+
               Teach me something interesting
+
             </button>
 
           </div>
@@ -128,12 +436,17 @@
 
 
         <!-- MESSAGES -->
-        <div id="messages" class="messages"></div>
+
+        <div
+          id="messages"
+          class="messages">
+        </div>
 
       </section>
 
 
-      <!-- MESSAGE COMPOSER -->
+      <!-- COMPOSER -->
+
       <section class="composer-area">
 
         <div class="composer">
@@ -144,19 +457,25 @@
             placeholder="Message AI..."
             aria-label="Message AI"></textarea>
 
+
           <button
             id="sendBtn"
             class="send-btn"
+            type="button"
             title="Send message"
             aria-label="Send message">
+
             ↑
+
           </button>
 
         </div>
 
+
         <div class="composer-note">
-          AI responses in this first version are local demo responses.
-          Connect a real AI API for full model intelligence.
+
+          Your chats are saved to your account when you are signed in.
+
         </div>
 
       </section>
@@ -166,37 +485,60 @@
   </div>
 
 
-  <!-- MOBILE OVERLAY -->
-  <div class="overlay" id="overlay"></div>
+  <!-- =====================================================
+       MOBILE OVERLAY
+       ===================================================== -->
+
+  <div
+    class="overlay"
+    id="overlay">
+  </div>
 
 
-  <!-- SHARE MODAL -->
-  <div class="modal hidden" id="shareModal">
+  <!-- =====================================================
+       SHARE MODAL
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="shareModal">
 
     <div class="modal-card">
 
       <button
         class="modal-close"
-        data-close="shareModal">
+        data-close="shareModal"
+        type="button"
+        aria-label="Close">
+
         ×
+
       </button>
+
 
       <h2>
         Share chat
       </h2>
 
+
       <p>
         Copy the current conversation as text.
       </p>
 
+
       <textarea
         id="shareText"
-        readonly></textarea>
+        readonly>
+      </textarea>
+
 
       <button
         class="primary-btn"
-        id="copyShareBtn">
+        id="copyShareBtn"
+        type="button">
+
         Copy chat
+
       </button>
 
     </div>
@@ -204,14 +546,34 @@
   </div>
 
 
-  <!-- TOAST NOTIFICATION -->
+  <!-- =====================================================
+       TOAST
+       ===================================================== -->
+
   <div
     class="toast"
-    id="toast">
+    id="toast"
+    role="status"
+    aria-live="polite">
   </div>
 
 
-  <!-- JAVASCRIPT -->
+  <!-- =====================================================
+       FIREBASE SDK
+       IMPORTANT: Firebase loads BEFORE app.js
+       ===================================================== -->
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
+
+  <!-- =====================================================
+       YOUR APPLICATION
+       ===================================================== -->
+
   <script src="app.js"></script>
 
 </body>
