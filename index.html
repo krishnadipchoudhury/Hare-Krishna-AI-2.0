@@ -245,6 +245,17 @@
 
           </div>
 
+          <button
+            id="settingsBtn"
+            class="settings-gear-btn"
+            type="button"
+            title="Settings"
+            aria-label="Open settings">
+
+            ⚙
+
+          </button>
+
         </div>
 
 
@@ -555,6 +566,230 @@
     id="toast"
     role="status"
     aria-live="polite">
+  </div>
+
+
+  <!-- =====================================================
+       SETTINGS MODAL
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="settingsModal">
+
+    <div class="modal-card settings-card">
+
+      <button
+        class="modal-close"
+        data-close="settingsModal"
+        type="button"
+        aria-label="Close">
+
+        ×
+
+      </button>
+
+      <h2>Settings</h2>
+
+      <div class="settings-scroll">
+
+        <!-- ACCOUNT -->
+        <div class="settings-section">
+
+          <div class="settings-section-title">Account</div>
+
+          <div class="settings-row">
+
+            <div id="settingsAvatar" class="settings-row-avatar">?</div>
+
+            <div class="settings-row-text">
+              <div id="settingsName" class="settings-row-title">Guest</div>
+              <div id="settingsEmail" class="settings-row-sub">Not signed in</div>
+            </div>
+
+          </div>
+
+          <button class="settings-item" id="manageAccountBtn" type="button">
+            <span>Manage Google Account</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+        </div>
+
+        <!-- MEMORY -->
+        <div class="settings-section">
+
+          <div class="settings-section-title">Memory</div>
+
+          <div class="settings-toggle-row">
+            <span>Reference saved memory</span>
+            <label class="switch">
+              <input type="checkbox" id="memoryToggle" checked>
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          <button class="settings-item" id="manageMemoryBtn" type="button">
+            <span>Manage memory</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+        </div>
+
+        <!-- CHATS -->
+        <div class="settings-section">
+
+          <div class="settings-section-title">Chats</div>
+
+          <button class="settings-item" id="openBinBtn" type="button">
+            <span>Recently deleted</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+        </div>
+
+        <!-- SUPPORT & LEGAL -->
+        <div class="settings-section">
+
+          <div class="settings-section-title">Support &amp; Legal</div>
+
+          <button class="settings-item" id="customerServiceBtn" type="button">
+            <span>Contact customer service</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+          <button class="settings-item" id="termsBtn" type="button">
+            <span>Terms &amp; Conditions</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+          <button class="settings-item" id="privacyBtn" type="button">
+            <span>Privacy Policy</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+          <button class="settings-item" id="licenseBtn" type="button">
+            <span>License</span>
+            <span class="settings-item-arrow">›</span>
+          </button>
+
+        </div>
+
+        <button class="settings-item danger-item" id="settingsSignOutBtn" type="button">
+          Sign out
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       MEMORY MODAL
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="memoryModal">
+
+    <div class="modal-card">
+
+      <button
+        class="modal-close"
+        data-close="memoryModal"
+        type="button"
+        aria-label="Close">
+
+        ×
+
+      </button>
+
+      <h2>Memory</h2>
+
+      <p>Things saved for the AI to remember about you.</p>
+
+      <div id="memoryList" class="memory-list"></div>
+
+      <div class="memory-add-row">
+
+        <input
+          type="text"
+          id="memoryInput"
+          maxlength="200"
+          placeholder="Add something to remember...">
+
+        <button class="primary-btn" id="addMemoryBtn" type="button">Add</button>
+
+      </div>
+
+      <button class="settings-item danger-item" id="clearMemoryBtn" type="button">
+        Delete all memory
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       BIN MODAL (recently deleted chats)
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="binModal">
+
+    <div class="modal-card">
+
+      <button
+        class="modal-close"
+        data-close="binModal"
+        type="button"
+        aria-label="Close">
+
+        ×
+
+      </button>
+
+      <h2>Recently deleted</h2>
+
+      <p>Chats stay here for 14 days, then are permanently deleted.</p>
+
+      <div id="binList" class="bin-list"></div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       LEGAL MODAL (Terms / Privacy / License)
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="legalModal">
+
+    <div class="modal-card">
+
+      <button
+        class="modal-close"
+        data-close="legalModal"
+        type="button"
+        aria-label="Close">
+
+        ×
+
+      </button>
+
+      <h2 id="legalTitle">Terms &amp; Conditions</h2>
+
+      <div id="legalContent" class="legal-content"></div>
+
+    </div>
+
   </div>
 
 
