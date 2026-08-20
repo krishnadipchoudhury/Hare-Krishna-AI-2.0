@@ -20,12 +20,12 @@
    ========================================================= */
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDnXgAC-flp3Th0hxkz3TfH5Hm6DUy-zE0",
-  authDomain: "my-ai-69dc8.firebaseapp.com",
-  projectId: "my-ai-69dc8",
-  storageBucket: "my-ai-69dc8.firebasestorage.app",
-  messagingSenderId: "90216546592",
-  appId: "1:90216546592:web:66534456efb20451671745"
+apiKey: "AIzaSyDnXgAC-flp3Th0hxkz3TfH5Hm6DUy-zE0",
+authDomain: "my-ai-69dc8.firebaseapp.com",
+projectId: "my-ai-69dc8",
+storageBucket: "my-ai-69dc8.firebasestorage.app",
+messagingSenderId: "90216546592",
+appId: "1:90216546592:web:66534456efb20451671745"
 };
 
 
@@ -69,6 +69,16 @@ let isGenerating = false;
 let unsubscribeChats = null;
 
 let toastTimer = null;
+
+let memoryEnabled = true;
+let memoryItems = [];
+
+let deletedChats = [];
+
+const BIN_RETENTION_DAYS = 14;
+const BIN_RETENTION_MS = BIN_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+const SUPPORT_EMAIL = "krishnadipchoudhury51@gmail.com";
 
 
 /* =========================================================
@@ -119,6 +129,37 @@ const userEmail = $("userEmail");
 
 const toast = $("toast");
 
+const settingsBtn = $("settingsBtn");
+const settingsModal = $("settingsModal");
+
+const settingsAvatar = $("settingsAvatar");
+const settingsName = $("settingsName");
+const settingsEmail = $("settingsEmail");
+
+const manageAccountBtn = $("manageAccountBtn");
+const settingsSignOutBtn = $("settingsSignOutBtn");
+
+const memoryToggle = $("memoryToggle");
+const manageMemoryBtn = $("manageMemoryBtn");
+const memoryModal = $("memoryModal");
+const memoryList = $("memoryList");
+const memoryInput = $("memoryInput");
+const addMemoryBtn = $("addMemoryBtn");
+const clearMemoryBtn = $("clearMemoryBtn");
+
+const openBinBtn = $("openBinBtn");
+const binModal = $("binModal");
+const binList = $("binList");
+
+const customerServiceBtn = $("customerServiceBtn");
+
+const termsBtn = $("termsBtn");
+const privacyBtn = $("privacyBtn");
+const licenseBtn = $("licenseBtn");
+const legalModal = $("legalModal");
+const legalTitle = $("legalTitle");
+const legalContent = $("legalContent");
+
 
 /* =========================================================
    5. BASIC SAFETY CHECK
@@ -138,7 +179,7 @@ function elementExists(element, name) {
    6. TOAST
    ========================================================= */
 
-function showToast(message) {
+function showToast(message, duration = 2600) {
   if (!toast) return;
 
   clearTimeout(toastTimer);
@@ -148,7 +189,7 @@ function showToast(message) {
 
   toastTimer = setTimeout(() => {
     toast.classList.remove("show");
-  }, 2600);
+  }, duration);
 }
 
 
@@ -251,7 +292,7 @@ function showAppScreen() {
 
 /* =========================================================
    11. GOOGLE LOGIN
-   ========================================================= */
+   ===============================================.========== */
 
 async function signInWithGoogle() {
   if (!firebaseReady) {
@@ -496,6 +537,11 @@ function continueAsGuest() {
 
   loadGuestChats();
 
+  loadGuestDeletedChats();
+  purgeExpiredDeletedChats();
+
+  loadMemoryLocal();
+
   updateUserPanel();
 
   showAppScreen();
@@ -569,6 +615,8 @@ async function createUserDocument(user) {
    ========================================================= */
 
 function updateUserPanel() {
+  updateSettingsPanel();
+
   if (!userAvatar || !userName || !userEmail) {
     return;
   }
@@ -614,6 +662,726 @@ function updateUserPanel() {
 
 
 /* =========================================================
+   17b. MODAL HELPERS
+   ========================================================= */
+
+function openModal(modal) {
+  if (modal) {
+    modal.classList.remove("hidden");
+  }
+}
+
+function closeModal(modal) {
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+}
+
+
+/* =========================================================
+   17c. SETTINGS PANEL
+   ========================================================= */
+
+function updateSettingsPanel() {
+  if (
+    !settingsAvatar ||
+    !settingsName ||
+    !settingsEmail
+  ) {
+    return;
+  }
+
+  if (isGuest || !currentUser) {
+    settingsName.textContent = "Guest";
+    settingsEmail.textContent = "Not signed in";
+
+    settingsAvatar.innerHTML = "?";
+
+    if (manageAccountBtn) {
+      manageAccountBtn.style.display = "none";
+    }
+
+    return;
+  }
+
+  const name =
+    currentUser.displayName ||
+    (
+      currentUser.email
+        ? currentUser.email.split("@")[0]
+        : "User"
+    );
+
+  settingsName.textContent = name;
+
+  settingsEmail.textContent =
+    currentUser.email || "";
+
+  if (currentUser.photoURL) {
+    settingsAvatar.innerHTML = "";
+
+    const img =
+      document.createElement("img");
+
+    img.src = currentUser.photoURL;
+    img.alt = "";
+
+    settingsAvatar.appendChild(img);
+
+  } else {
+    settingsAvatar.textContent =
+      name.charAt(0).toUpperCase();
+  }
+
+  const isGoogleUser =
+    Array.isArray(currentUser.providerData) &&
+    currentUser.providerData.some(
+      provider => provider.providerId === "google.com"
+    );
+
+  if (manageAccountBtn) {
+    manageAccountBtn.style.display =
+      isGoogleUser ? "flex" : "none";
+  }
+}
+
+function openSettingsModal() {
+  updateSettingsPanel();
+
+  if (memoryToggle) {
+    memoryToggle.checked = memoryEnabled;
+  }
+
+  openModal(settingsModal);
+}
+
+function openManageGoogleAccount() {
+  window.open(
+    "https://myaccount.google.com/",
+    "_blank",
+    "noopener"
+  );
+}
+
+
+/* =========================================================
+   17d. CUSTOMER SERVICE
+   ========================================================= */
+
+function openCustomerSupport() {
+  const subject =
+    encodeURIComponent("Support Request - Hare Krishna AI");
+
+  const body =
+    encodeURIComponent(
+      "Hi, I need help with...\n\n" +
+      "(Please describe your issue above. " +
+      "Include your account email if relevant.)"
+    );
+
+  const mailtoUrl =
+    `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+
+  // Using a real <a> element and clicking it is more reliable than
+  // window.location.href on mobile browsers/webviews, and reliably
+  // pre-fills the "To" field with the support address below.
+  const link =
+    document.createElement("a");
+
+  link.href = mailtoUrl;
+  link.rel = "noopener";
+  link.style.display = "none";
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  document.body.removeChild(link);
+}
+
+
+/* =========================================================
+   17e. LEGAL CONTENT (Terms / Privacy / License)
+   =========================================================
+   NOTE: This is placeholder text. Review and replace with
+   your own finalized Terms, Privacy Policy, and License
+   before publishing the app.
+   ========================================================= */
+
+const LEGAL_CONTENT = {
+
+  terms: {
+    title: "Terms & Conditions",
+    html:
+      "<h3>1. Acceptance of terms</h3>" +
+      "<p>By using this app, you agree to these terms. If you do not agree, please do not use the app.</p>" +
+      "<h3>2. Use of the service</h3>" +
+      "<p>You agree to use this app only for lawful purposes and not to misuse the AI responses or attempt to disrupt the service.</p>" +
+      "<h3>3. Account responsibility</h3>" +
+      "<p>You are responsible for keeping your login credentials secure and for all activity under your account.</p>" +
+      "<h3>4. Changes to these terms</h3>" +
+      "<p>These terms may be updated from time to time. Continued use of the app after changes means you accept the updated terms.</p>" +
+      "<p style='color:var(--muted);font-size:12px;margin-top:16px;'>This is placeholder text — replace with your reviewed Terms & Conditions before publishing.</p>"
+  },
+
+  privacy: {
+    title: "Privacy Policy",
+    html:
+      "<h3>Information we collect</h3>" +
+      "<p>When you sign in, we store your email address, display name, and profile photo (if provided) to identify your account.</p>" +
+      "<h3>Your chats</h3>" +
+      "<p>Chat messages are stored securely with your account so you can access them across sessions. Guest chats are stored only on your device.</p>" +
+      "<h3>Memory</h3>" +
+      "<p>Anything you save to Memory is stored with your account and used only to personalize your experience within this app.</p>" +
+      "<h3>Sharing</h3>" +
+      "<p>We do not sell your personal data. Chats shared via link are visible to anyone who has that link.</p>" +
+      "<p style='color:var(--muted);font-size:12px;margin-top:16px;'>This is placeholder text — replace with your reviewed Privacy Policy before publishing.</p>"
+  },
+
+  license: {
+    title: "License",
+    html:
+      "<h3>MIT License</h3>" +
+      "<p>Copyright (c) 2026 Krishnadip Choudhury</p>" +
+      "<p>Permission is hereby granted, free of charge, to any person obtaining a copy " +
+      "of this software and associated documentation files (the \"Software\"), to deal " +
+      "in the Software without restriction, including without limitation the rights " +
+      "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell " +
+      "copies of the Software, and to permit persons to whom the Software is " +
+      "furnished to do so, subject to the following conditions:</p>" +
+      "<p>The above copyright notice and this permission notice shall be included in all " +
+      "copies or substantial portions of the Software.</p>" +
+      "<p>THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR " +
+      "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, " +
+      "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE " +
+      "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER " +
+      "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, " +
+      "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE " +
+      "SOFTWARE.</p>" +
+      "<h3>Third-party services</h3>" +
+      "<p>This app uses Firebase (Google) for authentication and data storage, subject to Google's own terms of service.</p>"
+  }
+
+};
+
+function openLegalModal(key) {
+  const data = LEGAL_CONTENT[key];
+
+  if (
+    !data ||
+    !legalModal ||
+    !legalTitle ||
+    !legalContent
+  ) {
+    return;
+  }
+
+  legalTitle.textContent = data.title;
+  legalContent.innerHTML = data.html;
+
+  openModal(legalModal);
+}
+
+
+/* =========================================================
+   17f. MEMORY (guest = localStorage, account = Firestore)
+   ========================================================= */
+
+function loadMemoryLocal() {
+  try {
+    const saved =
+      localStorage.getItem("hareKrishnaGuestMemory");
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+
+      memoryItems =
+        Array.isArray(parsed.items) ? parsed.items : [];
+
+      memoryEnabled =
+        parsed.enabled !== false;
+
+    } else {
+      memoryItems = [];
+      memoryEnabled = true;
+    }
+
+  } catch (error) {
+    console.error("Memory load error:", error);
+
+    memoryItems = [];
+    memoryEnabled = true;
+  }
+}
+
+function saveMemoryLocal() {
+  try {
+    localStorage.setItem(
+      "hareKrishnaGuestMemory",
+      JSON.stringify({
+        items: memoryItems,
+        enabled: memoryEnabled
+      })
+    );
+
+  } catch (error) {
+    console.error("Memory save error:", error);
+  }
+}
+
+async function loadMemoryFromFirestore() {
+  if (!db || !currentUser) return;
+
+  try {
+    const doc =
+      await db
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("settings")
+        .doc("memory")
+        .get();
+
+    if (doc.exists) {
+      const data = doc.data();
+
+      memoryItems =
+        Array.isArray(data.items) ? data.items : [];
+
+      memoryEnabled =
+        data.enabled !== false;
+
+    } else {
+      memoryItems = [];
+      memoryEnabled = true;
+    }
+
+  } catch (error) {
+    console.error("Memory load error:", error);
+  }
+}
+
+async function saveMemoryToFirestore() {
+  if (!db || !currentUser) return;
+
+  try {
+    await db
+      .collection("users")
+      .doc(currentUser.uid)
+      .collection("settings")
+      .doc("memory")
+      .set(
+        {
+          items: memoryItems,
+          enabled: memoryEnabled,
+          updatedAt:
+            firebase.firestore.FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+
+  } catch (error) {
+    console.error("Memory save error:", error);
+  }
+}
+
+function persistMemory() {
+  if (!isGuest && currentUser) {
+    saveMemoryToFirestore();
+  } else {
+    saveMemoryLocal();
+  }
+}
+
+function renderMemoryList() {
+  if (!memoryList) return;
+
+  memoryList.innerHTML = "";
+
+  if (!memoryItems.length) {
+    const empty =
+      document.createElement("div");
+
+    empty.className = "memory-empty";
+    empty.textContent = "Nothing saved yet.";
+
+    memoryList.appendChild(empty);
+    return;
+  }
+
+  memoryItems.forEach(entry => {
+
+    const item =
+      document.createElement("div");
+
+    item.className = "memory-item";
+
+    const text =
+      document.createElement("div");
+
+    text.className = "memory-item-text";
+    text.textContent = entry.text;
+
+    const del =
+      document.createElement("button");
+
+    del.className = "memory-item-delete";
+    del.type = "button";
+    del.textContent = "×";
+    del.title = "Delete this memory";
+
+    del.addEventListener(
+      "click",
+      () => deleteMemoryEntry(entry.id)
+    );
+
+    item.appendChild(text);
+    item.appendChild(del);
+
+    memoryList.appendChild(item);
+  });
+}
+
+function addMemoryEntry(rawText) {
+  const clean = String(rawText || "").trim();
+
+  if (!clean) return;
+
+  memoryItems.unshift({
+    id: generateId(),
+    text: clean,
+    createdAt: Date.now()
+  });
+
+  persistMemory();
+  renderMemoryList();
+
+  showToast("Memory saved");
+}
+
+function deleteMemoryEntry(id) {
+  memoryItems =
+    memoryItems.filter(entry => entry.id !== id);
+
+  persistMemory();
+  renderMemoryList();
+}
+
+function clearAllMemory() {
+  if (!memoryItems.length) return;
+
+  const confirmed =
+    window.confirm(
+      "Delete all saved memory? This cannot be undone."
+    );
+
+  if (!confirmed) return;
+
+  memoryItems = [];
+
+  persistMemory();
+  renderMemoryList();
+
+  showToast("Memory cleared");
+}
+
+
+/* =========================================================
+   17g. RECENTLY DELETED (BIN) — 14 day soft delete
+   ========================================================= */
+
+function saveGuestDeletedChats() {
+  if (!isGuest) return;
+
+  try {
+    localStorage.setItem(
+      "hareKrishnaGuestBin",
+      JSON.stringify(deletedChats)
+    );
+
+  } catch (error) {
+    console.error("Bin storage error:", error);
+  }
+}
+
+function loadGuestDeletedChats() {
+  try {
+    const saved =
+      localStorage.getItem("hareKrishnaGuestBin");
+
+    const parsed =
+      saved ? JSON.parse(saved) : [];
+
+    deletedChats =
+      Array.isArray(parsed) ? parsed : [];
+
+  } catch (error) {
+    console.error("Bin load error:", error);
+
+    deletedChats = [];
+  }
+}
+
+async function saveDeletedChatToFirestore(chat) {
+  if (!db || !currentUser || !chat) return;
+
+  try {
+    await db
+      .collection("users")
+      .doc(currentUser.uid)
+      .collection("deletedChats")
+      .doc(chat.id)
+      .set(
+        {
+          id: chat.id,
+          title: chat.title || "New chat",
+          messages: chat.messages || [],
+          createdAt: chat.createdAt || Date.now(),
+          deletedAt: chat.deletedAt || Date.now()
+        },
+        { merge: true }
+      );
+
+  } catch (error) {
+    console.error("Bin save error:", error);
+  }
+}
+
+async function loadDeletedChatsFromFirestore() {
+  if (!db || !currentUser) return;
+
+  try {
+    const snapshot =
+      await db
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("deletedChats")
+        .orderBy("deletedAt", "desc")
+        .get();
+
+    deletedChats =
+      snapshot.docs.map(doc => {
+        const data = doc.data();
+
+        return {
+          id: data.id || doc.id,
+          title: data.title || "New chat",
+          messages:
+            Array.isArray(data.messages) ? data.messages : [],
+          createdAt: data.createdAt || Date.now(),
+          deletedAt: data.deletedAt || Date.now()
+        };
+      });
+
+  } catch (error) {
+    console.error("Bin load error:", error);
+  }
+}
+
+function daysRemainingLabel(deletedAt) {
+  const msLeft =
+    BIN_RETENTION_MS - (Date.now() - (deletedAt || 0));
+
+  const daysLeft =
+    Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+
+  if (daysLeft <= 0) return "Deleting soon";
+  if (daysLeft === 1) return "Deletes today";
+
+  return `Deletes in ${daysLeft} days`;
+}
+
+function renderBinList() {
+  if (!binList) return;
+
+  binList.innerHTML = "";
+
+  if (!deletedChats.length) {
+    const empty =
+      document.createElement("div");
+
+    empty.className = "bin-empty";
+    empty.textContent = "Nothing here.";
+
+    binList.appendChild(empty);
+    return;
+  }
+
+  deletedChats.forEach(chat => {
+
+    const item =
+      document.createElement("div");
+
+    item.className = "bin-item";
+
+    const text =
+      document.createElement("div");
+
+    text.className = "bin-item-text";
+
+    const title =
+      document.createElement("div");
+
+    title.className = "bin-item-title";
+    title.textContent = chat.title || "New chat";
+
+    const sub =
+      document.createElement("div");
+
+    sub.className = "bin-item-sub";
+    sub.textContent = daysRemainingLabel(chat.deletedAt);
+
+    text.appendChild(title);
+    text.appendChild(sub);
+
+    const actions =
+      document.createElement("div");
+
+    actions.className = "bin-item-actions";
+
+    const restoreBtn =
+      document.createElement("button");
+
+    restoreBtn.type = "button";
+    restoreBtn.className = "bin-restore-btn";
+    restoreBtn.textContent = "Restore";
+
+    restoreBtn.addEventListener(
+      "click",
+      () => restoreChat(chat.id)
+    );
+
+    const deleteBtn =
+      document.createElement("button");
+
+    deleteBtn.type = "button";
+    deleteBtn.className = "bin-delete-btn";
+    deleteBtn.textContent = "Delete";
+
+    deleteBtn.addEventListener(
+      "click",
+      () => permanentlyDeleteChat(chat.id)
+    );
+
+    actions.appendChild(restoreBtn);
+    actions.appendChild(deleteBtn);
+
+    item.appendChild(text);
+    item.appendChild(actions);
+
+    binList.appendChild(item);
+  });
+}
+
+async function restoreChat(chatId) {
+  const chat =
+    deletedChats.find(item => item.id === chatId);
+
+  if (!chat) return;
+
+  deletedChats =
+    deletedChats.filter(item => item.id !== chatId);
+
+  const restored = {
+    id: chat.id,
+    title: chat.title,
+    messages: chat.messages,
+    createdAt: chat.createdAt,
+    updatedAt: Date.now()
+  };
+
+  chats.unshift(restored);
+  currentChatId = restored.id;
+
+  saveGuestChats();
+  saveGuestDeletedChats();
+
+  renderChatList();
+  renderCurrentChat();
+  renderBinList();
+
+  if (!isGuest && currentUser && db) {
+    try {
+      await saveChatToFirestore(restored);
+
+      await db
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("deletedChats")
+        .doc(chatId)
+        .delete();
+
+    } catch (error) {
+      console.error("Restore chat error:", error);
+    }
+  }
+
+  showToast("Chat restored");
+}
+
+async function permanentlyDeleteChat(chatId) {
+  const confirmed =
+    window.confirm(
+      "Permanently delete this chat? This cannot be undone."
+    );
+
+  if (!confirmed) return;
+
+  deletedChats =
+    deletedChats.filter(item => item.id !== chatId);
+
+  saveGuestDeletedChats();
+  renderBinList();
+
+  if (!isGuest && currentUser && db) {
+    try {
+      await db
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("deletedChats")
+        .doc(chatId)
+        .delete();
+
+    } catch (error) {
+      console.error("Permanent delete error:", error);
+    }
+  }
+
+  showToast("Chat permanently deleted");
+}
+
+function purgeExpiredDeletedChats() {
+  if (!deletedChats.length) return;
+
+  const now = Date.now();
+
+  const expired =
+    deletedChats.filter(
+      item => now - (item.deletedAt || 0) > BIN_RETENTION_MS
+    );
+
+  if (!expired.length) return;
+
+  deletedChats =
+    deletedChats.filter(
+      item => now - (item.deletedAt || 0) <= BIN_RETENTION_MS
+    );
+
+  saveGuestDeletedChats();
+
+  if (!isGuest && currentUser && db) {
+    expired.forEach(item => {
+      db.collection("users")
+        .doc(currentUser.uid)
+        .collection("deletedChats")
+        .doc(item.id)
+        .delete()
+        .catch(() => {});
+    });
+  }
+}
+
+
+/* =========================================================
    18. AUTH STATE
    ========================================================= */
 
@@ -648,6 +1416,11 @@ function setupAuthListener() {
 
         await loadChatsFromFirestore();
 
+        await loadDeletedChatsFromFirestore();
+        purgeExpiredDeletedChats();
+
+        await loadMemoryFromFirestore();
+
         if (!currentChatId) {
           createNewChat(false);
         }
@@ -666,6 +1439,11 @@ function setupAuthListener() {
           isGuest = true;
 
           loadGuestChats();
+
+          loadGuestDeletedChats();
+          purgeExpiredDeletedChats();
+
+          loadMemoryLocal();
 
           updateUserPanel();
 
@@ -737,7 +1515,20 @@ function generateId() {
    21. CREATE NEW CHAT
    ========================================================= */
 
+const MAX_CHATS = 50;
+
 function createNewChat(showMessage = true) {
+
+  if (chats.length >= MAX_CHATS) {
+    showToast(
+      `You reached the maximum chat creating limit by ${MAX_CHATS}, ` +
+      "delete your old chats and create a new chat",
+      5000
+    );
+
+    return;
+  }
+
   const chat = {
     id: generateId(),
 
@@ -821,6 +1612,8 @@ function renderChatList() {
           : ""
       );
 
+    item.dataset.chatId = chat.id;
+
     const title =
       document.createElement("span");
 
@@ -845,7 +1638,7 @@ function renderChatList() {
       (event) => {
         event.stopPropagation();
 
-        showChatMenu(chat.id);
+        toggleChatMenu(chat.id, item, menu);
       }
     );
 
@@ -870,65 +1663,162 @@ function renderChatList() {
 
 
 /* =========================================================
-   24. CHAT MENU
+   24. CHAT DROPDOWN MENU (Rename / Delete)
    ========================================================= */
 
-function showChatMenu(chatId) {
+function closeAllChatMenus() {
+  document
+    .querySelectorAll(".chat-menu-popup")
+    .forEach(popup => popup.remove());
+
+  document
+    .querySelectorAll(".chat-menu.open")
+    .forEach(button => button.classList.remove("open"));
+}
+
+function toggleChatMenu(chatId, item, menuButton) {
+  const alreadyOpen =
+    menuButton.classList.contains("open");
+
+  closeAllChatMenus();
+
+  if (alreadyOpen) return;
+
   const chat =
-    chats.find(
-      item => item.id === chatId
-    );
+    chats.find(entry => entry.id === chatId);
 
   if (!chat) return;
 
-  const action =
-    window.prompt(
-      "Type: rename or delete",
-      "rename"
-    );
+  menuButton.classList.add("open");
 
-  if (!action) return;
+  const popup =
+    document.createElement("div");
 
-  if (
-    action.toLowerCase() ===
-    "delete"
-  ) {
-    deleteChat(chatId);
-    return;
+  popup.className = "chat-menu-popup";
+
+  const renameBtn =
+    document.createElement("button");
+
+  renameBtn.type = "button";
+
+  renameBtn.innerHTML =
+    "<span class='menu-icon'>✎</span><span>Rename</span>";
+
+  renameBtn.addEventListener(
+    "click",
+    (event) => {
+      event.stopPropagation();
+
+      closeAllChatMenus();
+
+      startRenameChat(chatId, item);
+    }
+  );
+
+  const deleteBtn =
+    document.createElement("button");
+
+  deleteBtn.type = "button";
+
+  deleteBtn.className = "danger";
+
+  deleteBtn.innerHTML =
+    "<span class='menu-icon'>🗑</span><span>Delete</span>";
+
+  deleteBtn.addEventListener(
+    "click",
+    (event) => {
+      event.stopPropagation();
+
+      closeAllChatMenus();
+
+      deleteChat(chatId);
+    }
+  );
+
+  popup.appendChild(renameBtn);
+  popup.appendChild(deleteBtn);
+
+  item.appendChild(popup);
+}
+
+/* Click anywhere outside an open chat menu closes it. */
+document.addEventListener("click", closeAllChatMenus);
+
+
+/* =========================================================
+   24b. RENAME CHAT (inline input, replaces window.prompt)
+   ========================================================= */
+
+function startRenameChat(chatId, item) {
+  const chat =
+    chats.find(entry => entry.id === chatId);
+
+  if (!chat || !item) return;
+
+  const titleSpan =
+    item.querySelector(".chat-title");
+
+  const menuButton =
+    item.querySelector(".chat-menu");
+
+  if (!titleSpan) return;
+
+  const input =
+    document.createElement("input");
+
+  input.type = "text";
+  input.className = "chat-title-input";
+  input.value = chat.title || "New chat";
+  input.maxLength = 80;
+
+  titleSpan.replaceWith(input);
+
+  if (menuButton) {
+    menuButton.style.display = "none";
   }
 
-  if (
-    action.toLowerCase() ===
-    "rename"
-  ) {
-    const title =
-      window.prompt(
-        "Enter new chat name:",
-        chat.title
-      );
+  input.focus();
+  input.select();
 
-    if (
-      title &&
-      title.trim()
-    ) {
-      chat.title =
-        title.trim();
+  const commit = () => {
+    const newTitle = input.value.trim();
 
-      chat.updatedAt =
-        Date.now();
+    if (newTitle) {
+      chat.title = newTitle;
+      chat.updatedAt = Date.now();
 
       saveGuestChats();
 
-      renderChatList();
-
-      if (
-        !isGuest &&
-        currentUser
-      ) {
+      if (!isGuest && currentUser) {
         saveChatToFirestore(chat);
       }
     }
-  }
+
+    renderChatList();
+  };
+
+  input.addEventListener(
+    "click",
+    event => event.stopPropagation()
+  );
+
+  input.addEventListener(
+    "keydown",
+    event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        renderChatList();
+      }
+    }
+  );
+
+  input.addEventListener("blur", commit);
 }
 
 
@@ -946,7 +1836,8 @@ async function deleteChat(chatId) {
 
   const confirmed =
     window.confirm(
-      "Delete this chat?"
+      "Delete this chat? You can restore it from " +
+      "Settings → Recently deleted within 14 days."
     );
 
   if (!confirmed) return;
@@ -965,11 +1856,24 @@ async function deleteChat(chatId) {
         : null;
   }
 
+  const deletedChat = {
+    id: chat.id,
+    title: chat.title,
+    messages: chat.messages,
+    createdAt: chat.createdAt,
+    deletedAt: Date.now()
+  };
+
+  deletedChats.unshift(deletedChat);
+
   saveGuestChats();
+  saveGuestDeletedChats();
 
   renderChatList();
 
   renderCurrentChat();
+
+  renderBinList();
 
   if (
     !isGuest &&
@@ -984,6 +1888,8 @@ async function deleteChat(chatId) {
         .doc(chatId)
         .delete();
 
+      await saveDeletedChatToFirestore(deletedChat);
+
     } catch (error) {
       console.error(
         "Delete chat error:",
@@ -992,7 +1898,7 @@ async function deleteChat(chatId) {
     }
   }
 
-  showToast("Chat deleted");
+  showToast("Chat moved to Recently deleted");
 }
 
 
@@ -1262,6 +2168,10 @@ async function sendMessage() {
 
     removeTypingIndicator();
 
+    await revealAssistantMessage(
+      response
+    );
+
     await addMessage(
       "assistant",
       response
@@ -1276,9 +2186,16 @@ async function sendMessage() {
 
     removeTypingIndicator();
 
+    const errorMessage =
+      "Sorry, something went wrong while generating the response.";
+
+    await revealAssistantMessage(
+      errorMessage
+    );
+
     await addMessage(
       "assistant",
-      "Sorry, something went wrong while generating the response."
+      errorMessage
     );
 
   } finally {
@@ -1287,6 +2204,48 @@ async function sendMessage() {
 
     messageInput.focus();
   }
+}
+
+
+/* =========================================================
+   30b. MEMORY-AWARE RESPONSE HELPERS
+   ========================================================= */
+
+function getUserDisplayNameFromMemory() {
+  if (!memoryEnabled || !memoryItems.length) return null;
+
+  const nameRegex =
+    /(?:my name is|i am|i'm|call me)\s+([a-zA-Z]+)/i;
+
+  for (const entry of memoryItems) {
+    const match =
+      (entry.text || "").match(nameRegex);
+
+    if (match && match[1]) {
+      return (
+        match[1].charAt(0).toUpperCase() +
+        match[1].slice(1).toLowerCase()
+      );
+    }
+  }
+
+  return null;
+}
+
+function getMemoryContextLine() {
+  if (!memoryEnabled || !memoryItems.length) return "";
+
+  const items =
+    memoryItems
+      .slice(0, 5)
+      .map(entry => `• ${entry.text}`)
+      .join("\n");
+
+  return (
+    "\n\n---\n" +
+    "From your saved memory:\n" +
+    items
+  );
 }
 
 
@@ -1302,13 +2261,55 @@ async function generateLocalResponse(
   const text =
     input.toLowerCase();
 
+  // --- Memory recall intents ---
+
+  if (
+    memoryEnabled &&
+    memoryItems.length &&
+    (
+      text.includes("remember about me") ||
+      text.includes("what do you know about me") ||
+      text.includes("what do you remember") ||
+      text.includes("do you remember")
+    )
+  ) {
+    const items =
+      memoryItems
+        .map(entry => `• ${entry.text}`)
+        .join("\n");
+
+    return (
+      "Here's what I have saved in memory about you:\n\n" +
+      items +
+      "\n\nYou can edit or delete any of these in Settings → Manage memory."
+    );
+  }
+
+  if (
+    memoryEnabled &&
+    !memoryItems.length &&
+    (
+      text.includes("remember about me") ||
+      text.includes("what do you know about me") ||
+      text.includes("what do you remember")
+    )
+  ) {
+    return (
+      "I don't have anything saved about you yet. " +
+      "Add something in Settings → Manage memory and I'll use it in our conversations."
+    );
+  }
+
+  const rememberedName =
+    getUserDisplayNameFromMemory();
+
   if (
     text.includes("hello") ||
     text.includes("hi") ||
     text.includes("hey")
   ) {
     return (
-      "Hello! 👋\n\n" +
+      `Hello${rememberedName ? ", " + rememberedName : ""}! 👋\n\n` +
       "I'm Hare Krishna AI. " +
       "I'm ready to help you learn, code, solve problems, or brainstorm ideas."
     );
@@ -1369,9 +2370,96 @@ async function generateLocalResponse(
     "I received your message:\n\n" +
     `"${input}"\n\n` +
     "This version of Hare Krishna AI is currently using a local demo response engine. " +
-    "Your Firebase authentication and chat storage can work independently.\n\n" +
-    "When you're ready, we can connect a real AI model to this interface."
+    "Your Firebase authentication and chat storage can work independently." +
+    getMemoryContextLine()
   );
+}
+
+
+/* =========================================================
+   31b. TYPEWRITER REVEAL FOR ASSISTANT MESSAGES
+   =========================================================
+   Renders the assistant's reply into the chat area one chunk
+   of characters at a time, like it's being typed live, before
+   the final (identical) message gets persisted via addMessage.
+   ========================================================= */
+
+function revealAssistantMessage(fullText) {
+  return new Promise((resolve) => {
+    if (!messages || !fullText) {
+      resolve();
+      return;
+    }
+
+    if (welcome) {
+      welcome.classList.add("hidden");
+    }
+
+    const row =
+      document.createElement("div");
+
+    row.className = "message-row assistant";
+
+    const avatar =
+      document.createElement("div");
+
+    avatar.className = "avatar";
+    avatar.textContent = "✦";
+
+    const wrapper =
+      document.createElement("div");
+
+    wrapper.className = "message-wrapper";
+
+    const bubble =
+      document.createElement("div");
+
+    bubble.className = "message";
+
+    const cursor =
+      document.createElement("span");
+
+    cursor.className = "typing-cursor";
+
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(cursor);
+
+    row.appendChild(avatar);
+    row.appendChild(wrapper);
+
+    messages.appendChild(row);
+
+    scrollToBottom();
+
+    let index = 0;
+
+    // Reveal a few characters per tick so long replies don't
+    // take forever, but it still reads as "typing".
+    const CHARS_PER_TICK =
+      fullText.length > 400 ? 6 : 3;
+
+    const TICK_MS = 14;
+
+    const timer = setInterval(() => {
+      index += CHARS_PER_TICK;
+
+      if (index >= fullText.length) {
+        bubble.textContent = fullText;
+
+        clearInterval(timer);
+
+        cursor.remove();
+
+        resolve();
+        return;
+      }
+
+      bubble.textContent =
+        fullText.substring(0, index);
+
+      scrollToBottom();
+    }, TICK_MS);
+  });
 }
 
 
@@ -2144,7 +3232,7 @@ function setupSuggestions() {
 
           autoResizeTextarea();
 
-          messageInput.focus();
+          sendMessage();
         }
       );
 
@@ -2157,17 +3245,56 @@ function setupSuggestions() {
    49. KEYBOARD
    ========================================================= */
 
+let shiftKeyIsDown = false;
+
 function setupKeyboard() {
   if (!messageInput) return;
 
   messageInput.addEventListener(
     "input",
-    autoResizeTextarea
+    event => {
+
+      // Mobile virtual keyboards (Android/Gboard especially) often
+      // don't fire a "keydown" we can reliably preventDefault() on
+      // when the user taps Return — the newline gets inserted first
+      // and an "input" event with inputType "insertLineBreak" fires
+      // after. Left uncaught, that stray "\n" sits inside the message
+      // and renders as an extra line break (white-space: pre-wrap),
+      // making even short one-line messages look broken across lines.
+      // Shift+Enter (desktop) is still allowed to insert a real
+      // newline for multi-line composing.
+      if (
+        !shiftKeyIsDown &&
+        (
+          event.inputType === "insertLineBreak" ||
+          event.inputType === "insertParagraph"
+        )
+      ) {
+
+        messageInput.value =
+          messageInput.value.replace(
+            /\n+$/,
+            ""
+          );
+
+        autoResizeTextarea();
+
+        sendMessage();
+
+        return;
+      }
+
+      autoResizeTextarea();
+    }
   );
 
   messageInput.addEventListener(
     "keydown",
     event => {
+
+      if (event.key === "Shift") {
+        shiftKeyIsDown = true;
+      }
 
       if (
         event.key === "Enter" &&
@@ -2179,6 +3306,15 @@ function setupKeyboard() {
         sendMessage();
       }
 
+    }
+  );
+
+  messageInput.addEventListener(
+    "keyup",
+    event => {
+      if (event.key === "Shift") {
+        shiftKeyIsDown = false;
+      }
     }
   );
 }
@@ -2297,6 +3433,136 @@ function setupEventListeners() {
     );
   }
 
+  if (settingsBtn) {
+    settingsBtn.addEventListener(
+      "click",
+      openSettingsModal
+    );
+  }
+
+  if (manageAccountBtn) {
+    manageAccountBtn.addEventListener(
+      "click",
+      openManageGoogleAccount
+    );
+  }
+
+  if (settingsSignOutBtn) {
+    settingsSignOutBtn.addEventListener(
+      "click",
+      () => {
+        closeModal(settingsModal);
+        logout();
+      }
+    );
+  }
+
+  if (memoryToggle) {
+    memoryToggle.addEventListener(
+      "change",
+      () => {
+        memoryEnabled = memoryToggle.checked;
+
+        persistMemory();
+
+        showToast(
+          memoryEnabled
+            ? "Memory turned on"
+            : "Memory turned off"
+        );
+      }
+    );
+  }
+
+  if (manageMemoryBtn) {
+    manageMemoryBtn.addEventListener(
+      "click",
+      () => {
+        closeModal(settingsModal);
+
+        renderMemoryList();
+
+        openModal(memoryModal);
+      }
+    );
+  }
+
+  if (addMemoryBtn) {
+    addMemoryBtn.addEventListener(
+      "click",
+      () => {
+        addMemoryEntry(memoryInput.value);
+
+        memoryInput.value = "";
+
+        memoryInput.focus();
+      }
+    );
+  }
+
+  if (memoryInput) {
+    memoryInput.addEventListener(
+      "keydown",
+      event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+
+          addMemoryEntry(memoryInput.value);
+
+          memoryInput.value = "";
+        }
+      }
+    );
+  }
+
+  if (clearMemoryBtn) {
+    clearMemoryBtn.addEventListener(
+      "click",
+      clearAllMemory
+    );
+  }
+
+  if (openBinBtn) {
+    openBinBtn.addEventListener(
+      "click",
+      () => {
+        closeModal(settingsModal);
+
+        renderBinList();
+
+        openModal(binModal);
+      }
+    );
+  }
+
+  if (customerServiceBtn) {
+    customerServiceBtn.addEventListener(
+      "click",
+      openCustomerSupport
+    );
+  }
+
+  if (termsBtn) {
+    termsBtn.addEventListener(
+      "click",
+      () => openLegalModal("terms")
+    );
+  }
+
+  if (privacyBtn) {
+    privacyBtn.addEventListener(
+      "click",
+      () => openLegalModal("privacy")
+    );
+  }
+
+  if (licenseBtn) {
+    licenseBtn.addEventListener(
+      "click",
+      () => openLegalModal("license")
+    );
+  }
+
   if ($("menuBtn")) {
     $("menuBtn").addEventListener(
       "click",
@@ -2348,11 +3614,13 @@ function setupEventListeners() {
 
         closeMobileSidebar();
 
-        if (shareModal) {
-          shareModal.classList.add(
-            "hidden"
-          );
-        }
+        closeAllChatMenus();
+
+        closeModal(shareModal);
+        closeModal(settingsModal);
+        closeModal(memoryModal);
+        closeModal(binModal);
+        closeModal(legalModal);
       }
 
     }
