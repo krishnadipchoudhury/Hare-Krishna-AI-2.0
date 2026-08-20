@@ -409,7 +409,6 @@ button:disabled {
   box-shadow: none;
 }
 
-
 /* =========================================================
    CREATE ACCOUNT
    ========================================================= */
@@ -654,6 +653,8 @@ button:disabled {
 .chat-item {
   width: 100%;
 
+  position: relative;
+
   display: flex;
 
   align-items: center;
@@ -690,8 +691,28 @@ button:disabled {
   flex: 1;
 }
 
+.chat-title-input {
+  flex: 1;
+
+  min-width: 0;
+
+  background: var(--bg);
+
+  color: var(--text);
+
+  border: 1px solid var(--accent);
+
+  border-radius: 6px;
+
+  padding: 3px 6px;
+
+  font-size: 14px;
+
+  font-family: inherit;
+}
+
 .chat-menu {
-  opacity: 0;
+  opacity: 1;
 
   border: 0;
 
@@ -702,13 +723,663 @@ button:disabled {
   font-size: 18px;
 
   padding: 0 5px;
+
+  border-radius: 6px;
 }
 
-.chat-item:hover .chat-menu,
-.chat-item.active .chat-menu {
-  opacity: 1;
+.chat-menu:hover,
+.chat-menu.open {
+  background: var(--border);
+
+  color: var(--text);
 }
 
+/* On desktop, only reveal the ⋯ button on hover/active.
+   Mobile has no hover so it's always visible via the
+   opacity:1 default above and this media query. */
+@media (hover: hover) and (pointer: fine) {
+  .chat-menu {
+    opacity: 0;
+  }
+
+  .chat-item:hover .chat-menu,
+  .chat-item.active .chat-menu,
+  .chat-menu.open {
+    opacity: 1;
+  }
+}
+
+/* =========================================================
+   CHAT ITEM DROPDOWN (Rename / Delete)
+   ========================================================= */
+
+.chat-menu-popup {
+  position: absolute;
+
+  top: calc(100% + 2px);
+
+  right: 6px;
+
+  z-index: 50;
+
+  min-width: 150px;
+
+  background: var(--panel);
+
+  border: 1px solid var(--border);
+
+  border-radius: 12px;
+
+  box-shadow: var(--shadow);
+
+  padding: 5px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 2px;
+
+  animation: menuPop .12s ease;
+}
+
+@keyframes menuPop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.chat-menu-popup button {
+  display: flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  width: 100%;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--text);
+
+  font-size: 14px;
+
+  font-family: inherit;
+
+  padding: 9px 10px;
+
+  border-radius: 8px;
+
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-menu-popup button:hover {
+  background: var(--panel-2);
+}
+
+.chat-menu-popup button.danger {
+  color: var(--danger);
+}
+
+.chat-menu-popup .menu-icon {
+  font-size: 15px;
+
+  width: 16px;
+
+  text-align: center;
+
+  flex: 0 0 auto;
+}
+
+
+.settings-gear-btn {
+  flex: 0 0 auto;
+
+  width: 30px;
+  height: 30px;
+
+  border: 0;
+
+  border-radius: 8px;
+
+  background: transparent;
+
+  color: var(--muted);
+
+  font-size: 16px;
+}
+
+.settings-gear-btn:hover {
+  background: var(--panel-2);
+
+  color: var(--text);
+}
+
+
+/* =========================================================
+   FULL-SCREEN SETTINGS-FLOW MODALS
+   =========================================================
+   Settings, Memory, Bin and Legal are reached one from
+   another as a single flow, so they open as full-screen
+   pages instead of small floating cards that can't be
+   moved on mobile.
+   ========================================================= */
+
+#settingsModal,
+#memoryModal,
+#binModal,
+#legalModal {
+  padding: 0;
+
+  background: var(--bg);
+}
+
+#settingsModal .modal-card,
+#memoryModal .modal-card,
+#binModal .modal-card,
+#legalModal .modal-card {
+  width: 100%;
+
+  max-width: none;
+
+  height: 100vh;
+  height: 100dvh;
+
+  max-height: none;
+
+  border-radius: 0;
+
+  border: 0;
+
+  box-shadow: none;
+
+  overflow-y: auto;
+
+  padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+}
+
+#settingsModal .settings-scroll {
+  overflow: visible;
+
+  max-height: none;
+}
+
+#legalModal .legal-content {
+  max-height: none;
+
+  overflow: visible;
+}
+
+#settingsModal .modal-close,
+#memoryModal .modal-close,
+#binModal .modal-close,
+#legalModal .modal-close {
+  top: calc(14px + env(safe-area-inset-top));
+}
+
+
+/* =========================================================
+   SETTINGS MODAL
+   ========================================================= */
+
+.settings-card {
+  width: min(480px, 100%);
+
+  max-height: 85vh;
+
+  display: flex;
+
+  flex-direction: column;
+}
+
+.settings-scroll {
+  overflow-y: auto;
+
+  margin-top: 6px;
+
+  padding-right: 2px;
+}
+
+.settings-section {
+  padding: 14px 0;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section:last-of-type {
+  border-bottom: 0;
+}
+
+.settings-section-title {
+  color: var(--muted);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  letter-spacing: .06em;
+
+  margin-bottom: 10px;
+}
+
+.settings-row {
+  display: flex;
+
+  align-items: center;
+
+  gap: 12px;
+
+  padding: 4px 0 12px;
+}
+
+.settings-row-avatar {
+  width: 44px;
+  height: 44px;
+
+  flex: 0 0 44px;
+
+  border-radius: 50%;
+
+  background: var(--accent);
+
+  color: white;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  font-weight: 700;
+
+  font-size: 17px;
+
+  overflow: hidden;
+}
+
+.settings-row-avatar img {
+  width: 100%;
+  height: 100%;
+
+  object-fit: cover;
+}
+
+.settings-row-title {
+  font-weight: 600;
+}
+
+.settings-row-sub {
+  color: var(--muted);
+
+  font-size: 13px;
+}
+
+.settings-item {
+  width: 100%;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--text);
+
+  padding: 12px 4px;
+
+  font-size: 14px;
+
+  font-family: inherit;
+
+  text-align: left;
+
+  border-radius: 8px;
+}
+
+.settings-item:hover {
+  background: var(--panel-2);
+}
+
+.settings-item-arrow {
+  color: var(--muted);
+
+  font-size: 16px;
+}
+
+.settings-item.danger-item {
+  color: var(--danger);
+
+  font-weight: 600;
+
+  justify-content: flex-start;
+
+  gap: 8px;
+
+  margin-top: 8px;
+}
+
+.settings-toggle-row {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  padding: 8px 4px;
+
+  font-size: 14px;
+}
+
+.switch {
+  position: relative;
+
+  display: inline-block;
+
+  width: 40px;
+  height: 24px;
+
+  flex: 0 0 auto;
+}
+
+.switch input {
+  opacity: 0;
+
+  width: 0;
+  height: 0;
+}
+
+.switch-slider {
+  position: absolute;
+
+  cursor: pointer;
+
+  inset: 0;
+
+  background: var(--border);
+
+  border-radius: 999px;
+
+  transition: background .15s ease;
+}
+
+.switch-slider::before {
+  content: "";
+
+  position: absolute;
+
+  width: 18px;
+  height: 18px;
+
+  left: 3px;
+  top: 3px;
+
+  background: white;
+
+  border-radius: 50%;
+
+  transition: transform .15s ease;
+}
+
+.switch input:checked + .switch-slider {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-slider::before {
+  transform: translateX(16px);
+}
+
+
+/* =========================================================
+   MEMORY MODAL
+   ========================================================= */
+
+.memory-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  max-height: 260px;
+
+  overflow-y: auto;
+
+  margin-bottom: 12px;
+}
+
+.memory-empty {
+  color: var(--muted);
+
+  font-size: 13px;
+
+  padding: 10px 0;
+}
+
+.memory-item {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 10px;
+
+  padding: 10px 12px;
+
+  background: var(--panel);
+
+  border: 1px solid var(--border);
+
+  border-radius: 10px;
+}
+
+.memory-item-text {
+  flex: 1;
+
+  font-size: 14px;
+
+  line-height: 1.4;
+
+  word-break: break-word;
+}
+
+.memory-item-delete {
+  flex: 0 0 auto;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--muted);
+
+  font-size: 16px;
+  line-height: 1;
+
+  padding: 2px;
+}
+
+.memory-item-delete:hover {
+  color: var(--danger);
+}
+
+.memory-add-row {
+  display: flex;
+
+  gap: 8px;
+}
+
+.memory-add-row input {
+  flex: 1;
+
+  min-width: 0;
+
+  border: 1px solid var(--border);
+
+  background: var(--panel);
+
+  color: var(--text);
+
+  border-radius: 10px;
+
+  padding: 10px 12px;
+
+  font-size: 14px;
+
+  font-family: inherit;
+
+  outline: 0;
+}
+
+.memory-add-row input:focus {
+  border-color: var(--accent);
+}
+
+
+/* =========================================================
+   BIN MODAL
+   ========================================================= */
+
+.bin-list {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+
+  max-height: 340px;
+
+  overflow-y: auto;
+}
+
+.bin-empty {
+  color: var(--muted);
+
+  font-size: 13px;
+
+  padding: 10px 0;
+}
+
+.bin-item {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 10px 12px;
+
+  background: var(--panel);
+
+  border: 1px solid var(--border);
+
+  border-radius: 10px;
+}
+
+.bin-item-text {
+  flex: 1;
+
+  min-width: 0;
+}
+
+.bin-item-title {
+  font-size: 14px;
+
+  font-weight: 600;
+
+  overflow: hidden;
+
+  white-space: nowrap;
+
+  text-overflow: ellipsis;
+}
+
+.bin-item-sub {
+  color: var(--muted);
+
+  font-size: 12px;
+
+  margin-top: 2px;
+}
+
+.bin-item-actions {
+  display: flex;
+
+  gap: 6px;
+
+  flex: 0 0 auto;
+}
+
+.bin-item-actions button {
+  border: 0;
+
+  border-radius: 8px;
+
+  padding: 7px 10px;
+
+  font-size: 13px;
+
+  font-weight: 600;
+
+  font-family: inherit;
+}
+
+.bin-restore-btn {
+  background: var(--accent-soft);
+
+  color: var(--accent);
+}
+
+.bin-delete-btn {
+  background: transparent;
+
+  color: var(--danger);
+}
+
+
+/* =========================================================
+   LEGAL MODAL
+   ========================================================= */
+
+.legal-content {
+  max-height: 55vh;
+
+  overflow-y: auto;
+
+  font-size: 14px;
+
+  line-height: 1.6;
+
+  color: var(--text);
+}
+
+.legal-content h3 {
+  margin: 16px 0 6px;
+
+  font-size: 15px;
+}
+
+.legal-content h3:first-child {
+  margin-top: 0;
+}
+
+.legal-content p {
+  color: var(--text);
+
+  margin: 0 0 10px;
+}
 
 /* =========================================================
    SIDEBAR BOTTOM
@@ -1079,7 +1750,9 @@ button:disabled {
 
   white-space: pre-wrap;
 
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+
+  word-break: normal;
 }
 
 .user .message {
@@ -1250,6 +1923,30 @@ button:disabled {
   }
 }
 
+/* Blinking cursor shown at the end of an assistant message
+   while it is still being "typed" onto the screen. */
+.typing-cursor {
+  display: inline-block;
+
+  width: 2px;
+
+  height: 1em;
+
+  margin-left: 1px;
+
+  background: var(--text);
+
+  vertical-align: text-bottom;
+
+  animation: cursorBlink .8s step-start infinite;
+}
+
+@keyframes cursorBlink {
+  50% {
+    opacity: 0;
+  }
+}
+
 
 /* =========================================================
    COMPOSER
@@ -1326,17 +2023,23 @@ button:disabled {
 
   border-radius: 12px;
 
-  background: var(--accent);
+  background: #1a73e8;
 
   color: white;
 
   font-size: 21px;
 
-  font-weight: 700;
+  font-weight: 900;
+
+  transition: background .15s ease, transform .1s ease;
 }
 
 .send-btn:hover {
-  background: var(--accent-hover);
+  background: #1558b0;
+}
+
+.send-btn:active {
+  transform: scale(.92);
 }
 
 .send-btn:disabled {
