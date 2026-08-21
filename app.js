@@ -292,7 +292,7 @@ function showAppScreen() {
 
 /* =========================================================
    11. GOOGLE LOGIN
-   ===============================================.========== */
+   ========================================================= */
 
 async function signInWithGoogle() {
   if (!firebaseReady) {
@@ -1947,6 +1947,52 @@ function renderCurrentChat() {
 
 
 /* =========================================================
+   26b. RENDER SOURCES (web search links under an AI answer)
+   ========================================================= */
+
+function renderSourcesList(container, sources) {
+  if (!container || !Array.isArray(sources) || !sources.length) {
+    return;
+  }
+
+  const list =
+    document.createElement("div");
+
+  list.className = "message-sources";
+
+  const label =
+    document.createElement("div");
+
+  label.className = "message-sources-label";
+  label.textContent = "Sources";
+
+  list.appendChild(label);
+
+  sources.slice(0, 5).forEach(source => {
+    if (!source || !source.url) return;
+
+    const link =
+      document.createElement("a");
+
+    link.href = source.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "message-source-link";
+    link.title = source.url;
+
+    // textContent only — these titles/URLs come from an external
+    // API response, never treat them as trusted HTML.
+    link.textContent =
+      source.title || source.url;
+
+    list.appendChild(link);
+  });
+
+  container.appendChild(list);
+}
+
+
+/* =========================================================
    27. RENDER MESSAGE
    ========================================================= */
 
@@ -1998,6 +2044,11 @@ function renderMessage(
     message.content || "";
 
   wrapper.appendChild(bubble);
+
+  renderSourcesList(
+    wrapper,
+    message.sources
+  );
 
   if (
     message.role ===
@@ -2055,18 +2106,22 @@ function renderMessage(
 
 async function addMessage(
   role,
-  content
+  content,
+  sources
 ) {
   const chat =
     getCurrentChat();
 
   if (!chat) return;
 
-  chat.messages.push({
+  const message = {
     role,
     content,
+    sources: Array.isArray(sources) ? sources : [],
     createdAt: Date.now()
-  });
+  };
+
+  chat.messages.push(message);
 
   chat.updatedAt =
     Date.now();
@@ -2083,7 +2138,7 @@ async function addMessage(
 
   renderChatList();
 
-  renderCurrentChat();
+  appendMessageIncremental(message);
 
   if (
     !isGuest &&
@@ -2093,6 +2148,37 @@ async function addMessage(
       chat
     );
   }
+}
+
+
+/* =========================================================
+   28b. APPEND MESSAGE INCREMENTALLY
+   =========================================================
+   Adds just the one new message to the DOM instead of wiping
+   and re-rendering the whole thread on every send — keeps
+   long chats and big messages (code/poems/stories) fast and
+   avoids any flash/rebuild jank. Also removes the temporary
+   typewriter-reveal row for assistant replies so the final
+   persisted message replaces it cleanly instead of stacking.
+   ========================================================= */
+
+function appendMessageIncremental(message) {
+  if (!messages) return;
+
+  if (welcome) {
+    welcome.classList.add("hidden");
+  }
+
+  const tempReveal =
+    document.getElementById("assistantRevealTemp");
+
+  if (tempReveal) {
+    tempReveal.remove();
+  }
+
+  renderMessage(message);
+
+  scrollToBottom();
 }
 
 
@@ -2154,27 +2240,44 @@ async function sendMessage() {
 
   try {
 
-    /*
-     * This is a LOCAL demo response.
-     *
-     * Later we can replace this function
-     * with your real AI backend/API.
-     */
+    let result;
 
-    const response =
-      await generateLocalResponse(
-        text
+    try {
+      // Real AI: web search (Tavily) + streamed answer (Groq),
+      // via the /api/chat serverless function.
+      result =
+        await streamAssistantMessage(
+          text
+        );
+
+    } catch (apiError) {
+
+      console.error(
+        "AI backend unreachable, falling back to local demo:",
+        apiError
       );
 
-    removeTypingIndicator();
+      // Backend hiccup / offline — fall back to the local demo
+      // engine rather than showing a dead end. The temp reveal
+      // row from streamAssistantMessage (if any) gets replaced
+      // cleanly by addMessage()'s incremental append either way.
+      const fallbackText =
+        await generateLocalResponse(
+          text
+        );
 
-    await revealAssistantMessage(
-      response
-    );
+      removeTypingIndicator();
+
+      result = {
+        text: fallbackText,
+        sources: []
+      };
+    }
 
     await addMessage(
       "assistant",
-      response
+      result.text,
+      result.sources
     );
 
   } catch (error) {
@@ -2188,10 +2291,6 @@ async function sendMessage() {
 
     const errorMessage =
       "Sorry, something went wrong while generating the response.";
-
-    await revealAssistantMessage(
-      errorMessage
-    );
 
     await addMessage(
       "assistant",
@@ -2209,42 +2308,129 @@ async function sendMessage() {
 
 /* =========================================================
    30b. MEMORY-AWARE RESPONSE HELPERS
+   =========================================================
+   Instead of dumping every saved memory item into every
+   reply, this extracts specific facts ("name", "favorite
+   food", "favorite song", etc.) from BOTH explicit Memory
+   entries AND the user's own past chat messages, then only
+   answers with a fact when the question actually asks for
+   that specific thing.
    ========================================================= */
 
-function getUserDisplayNameFromMemory() {
-  if (!memoryEnabled || !memoryItems.length) return null;
+const FAVORITE_FACT_REGEX =
+  /my\s+favou?rite\s+([a-z][a-z\s]{0,25}?)\s+is\s+([^.,!?\n]{1,60})/gi;
 
-  const nameRegex =
-    /(?:my name is|i am|i'm|call me)\s+([a-zA-Z]+)/i;
+const NAME_FACT_REGEX =
+  /(?:my name is|call me|i'm|i am)\s+([a-zA-Z]+)/i;
 
-  for (const entry of memoryItems) {
-    const match =
-      (entry.text || "").match(nameRegex);
+function extractFactsFromText(rawText) {
+  const facts = {};
 
-    if (match && match[1]) {
-      return (
-        match[1].charAt(0).toUpperCase() +
-        match[1].slice(1).toLowerCase()
-      );
+  const text = String(rawText || "");
+
+  if (!text) return facts;
+
+  const nameMatch =
+    text.match(NAME_FACT_REGEX);
+
+  if (nameMatch && nameMatch[1]) {
+    facts.name =
+      nameMatch[1].charAt(0).toUpperCase() +
+      nameMatch[1].slice(1).toLowerCase();
+  }
+
+  // Reset lastIndex since this is a shared global-flag regex.
+  FAVORITE_FACT_REGEX.lastIndex = 0;
+
+  let match;
+
+  while (
+    (match = FAVORITE_FACT_REGEX.exec(text)) !== null
+  ) {
+    const key =
+      match[1]
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const value =
+      match[2]
+        .trim()
+        .replace(/\s+/g, " ");
+
+    if (key && value) {
+      facts[`favorite:${key}`] = value;
     }
   }
 
-  return null;
+  return facts;
 }
 
-function getMemoryContextLine() {
-  if (!memoryEnabled || !memoryItems.length) return "";
+function getKnownFacts() {
+  const facts = {};
 
-  const items =
+  // 1) Facts mentioned anywhere in the user's own past chat
+  //    messages, oldest first, so a more recent mention of
+  //    the same fact naturally overrides an older one.
+  const userMessages = [];
+
+  chats.forEach(chat => {
+    (chat.messages || []).forEach(message => {
+      if (message.role === "user") {
+        userMessages.push(message);
+      }
+    });
+  });
+
+  userMessages
+    .sort(
+      (a, b) =>
+        (a.createdAt || 0) - (b.createdAt || 0)
+    )
+    .forEach(message => {
+      Object.assign(
+        facts,
+        extractFactsFromText(message.content)
+      );
+    });
+
+  // 2) Explicit Settings → Memory entries are the most
+  //    deliberate signal, so they're applied last and win
+  //    over anything only inferred from casual chat.
+  if (memoryEnabled) {
     memoryItems
-      .slice(0, 5)
-      .map(entry => `• ${entry.text}`)
-      .join("\n");
+      .slice()
+      .sort(
+        (a, b) =>
+          (a.createdAt || 0) - (b.createdAt || 0)
+      )
+      .forEach(entry => {
+        Object.assign(
+          facts,
+          extractFactsFromText(entry.text)
+        );
+      });
+  }
+
+  return facts;
+}
+
+function findFavoriteQuestionKey(text) {
+  const cleaned =
+    text.trim().replace(/[?!.]+$/, "");
+
+  const match =
+    cleaned.match(
+      /what(?:'s| is|s)?\s+my\s+favou?rite\s+([a-z][a-z\s]*)/i
+    );
+
+  if (!match || !match[1]) return null;
 
   return (
-    "\n\n---\n" +
-    "From your saved memory:\n" +
-    items
+    match[1]
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ")
   );
 }
 
@@ -2261,47 +2447,81 @@ async function generateLocalResponse(
   const text =
     input.toLowerCase();
 
-  // --- Memory recall intents ---
+  const facts =
+    getKnownFacts();
 
-  if (
-    memoryEnabled &&
-    memoryItems.length &&
-    (
-      text.includes("remember about me") ||
-      text.includes("what do you know about me") ||
-      text.includes("what do you remember") ||
-      text.includes("do you remember")
-    )
-  ) {
-    const items =
-      memoryItems
-        .map(entry => `• ${entry.text}`)
-        .join("\n");
+  // --- Specific "what is my favorite X" questions ---
+  // Only answers when the exact attribute asked about is
+  // actually known — never surfaces unrelated saved facts.
+
+  const favoriteKey =
+    findFavoriteQuestionKey(input);
+
+  if (favoriteKey) {
+    const value =
+      facts[`favorite:${favoriteKey}`];
+
+    if (value) {
+      return `Your favourite ${favoriteKey} is ${value}.`;
+    }
 
     return (
-      "Here's what I have saved in memory about you:\n\n" +
-      items +
-      "\n\nYou can edit or delete any of these in Settings → Manage memory."
+      `You haven't told me your favourite ${favoriteKey} yet. ` +
+      "Mention it in a message, or add it in Settings → Manage memory, " +
+      "and I'll remember it from then on."
     );
   }
 
+  // --- "What do you remember about me?" — full recall ---
+
   if (
-    memoryEnabled &&
-    !memoryItems.length &&
-    (
-      text.includes("remember about me") ||
-      text.includes("what do you know about me") ||
-      text.includes("what do you remember")
-    )
+    text.includes("remember about me") ||
+    text.includes("what do you know about me") ||
+    text.includes("what do you remember") ||
+    text.includes("do you remember")
   ) {
-    return (
-      "I don't have anything saved about you yet. " +
-      "Add something in Settings → Manage memory and I'll use it in our conversations."
-    );
+    const savedLines =
+      memoryEnabled && memoryItems.length
+        ? memoryItems.map(entry => `• ${entry.text}`)
+        : [];
+
+    const learnedLines =
+      Object.keys(facts)
+        .filter(key => key.startsWith("favorite:"))
+        .map(
+          key =>
+            `• Your favourite ${key.replace("favorite:", "")} is ${facts[key]}`
+        );
+
+    if (!savedLines.length && !learnedLines.length) {
+      return (
+        "I don't have anything saved about you yet. " +
+        "Add something in Settings → Manage memory, or just mention it in chat " +
+        "(e.g. \"my favourite food is paneer\") and I'll remember it."
+      );
+    }
+
+    let reply = "";
+
+    if (savedLines.length) {
+      reply +=
+        "From Settings → Memory:\n" +
+        savedLines.join("\n");
+    }
+
+    if (learnedLines.length) {
+      if (reply) reply += "\n\n";
+
+      reply +=
+        "From our conversations:\n" +
+        learnedLines.join("\n");
+    }
+
+    return reply;
   }
 
   const rememberedName =
-    getUserDisplayNameFromMemory();
+    facts.name || null;
 
   if (
     text.includes("hello") ||
@@ -2370,96 +2590,185 @@ async function generateLocalResponse(
     "I received your message:\n\n" +
     `"${input}"\n\n` +
     "This version of Hare Krishna AI is currently using a local demo response engine. " +
-    "Your Firebase authentication and chat storage can work independently." +
-    getMemoryContextLine()
+    "Your Firebase authentication and chat storage can work independently."
   );
 }
 
 
 /* =========================================================
-   31b. TYPEWRITER REVEAL FOR ASSISTANT MESSAGES
+   31b. STREAMING AI RESPONSE (/api/chat — Tavily + Groq)
    =========================================================
-   Renders the assistant's reply into the chat area one chunk
-   of characters at a time, like it's being typed live, before
-   the final (identical) message gets persisted via addMessage.
+   Creates the assistant's message row, then streams the real
+   answer into it token-by-token as it arrives from the
+   serverless function. Returns { text, sources } once the
+   stream ends, so sendMessage() can persist the final result
+   via addMessage() — appendMessageIncremental() then swaps
+   this temporary row out for the persisted one automatically
+   (matched by the "assistantRevealTemp" id).
    ========================================================= */
 
-function revealAssistantMessage(fullText) {
-  return new Promise((resolve) => {
-    if (!messages || !fullText) {
-      resolve();
-      return;
+function getRecentHistoryForApi() {
+  const chat = getCurrentChat();
+
+  if (!chat || !Array.isArray(chat.messages)) {
+    return [];
+  }
+
+  return chat.messages
+    .slice(-10)
+    .map(m => ({
+      role: m.role,
+      content: m.content
+    }));
+}
+
+async function streamAssistantMessage(userText) {
+  if (!messages) {
+    return { text: "", sources: [] };
+  }
+
+  if (welcome) {
+    welcome.classList.add("hidden");
+  }
+
+  const row =
+    document.createElement("div");
+
+  row.id = "assistantRevealTemp";
+
+  row.className = "message-row assistant";
+
+  const avatar =
+    document.createElement("div");
+
+  avatar.className = "avatar";
+  avatar.textContent = "✦";
+
+  const wrapper =
+    document.createElement("div");
+
+  wrapper.className = "message-wrapper";
+
+  const bubble =
+    document.createElement("div");
+
+  bubble.className = "message";
+
+  const cursor =
+    document.createElement("span");
+
+  cursor.className = "typing-cursor";
+
+  wrapper.appendChild(bubble);
+  wrapper.appendChild(cursor);
+
+  row.appendChild(avatar);
+  row.appendChild(wrapper);
+
+  messages.appendChild(row);
+
+  scrollToBottom();
+
+  const response =
+    await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message: userText,
+        history: getRecentHistoryForApi(),
+        facts: getKnownFacts()
+      })
+    });
+
+  if (!response.ok || !response.body) {
+    throw new Error(
+      "AI request failed with status " + response.status
+    );
+  }
+
+  const reader =
+    response.body.getReader();
+
+  const decoder =
+    new TextDecoder();
+
+  let buffer = "";
+  let metaConsumed = false;
+  let fullText = "";
+  let sources = [];
+  let firstChunkArrived = false;
+
+  while (true) {
+    const { done, value } =
+      await reader.read();
+
+    if (done) break;
+
+    buffer +=
+      decoder.decode(value, { stream: true });
+
+    // First line of the stream is a JSON "sources" descriptor —
+    // wait until we actually have a full line before parsing it.
+    if (!metaConsumed) {
+      const newlineIndex =
+        buffer.indexOf("\n");
+
+      if (newlineIndex === -1) continue;
+
+      const metaLine =
+        buffer.slice(0, newlineIndex);
+
+      buffer =
+        buffer.slice(newlineIndex + 1);
+
+      metaConsumed = true;
+
+      try {
+        const meta =
+          JSON.parse(metaLine);
+
+        if (meta && meta.type === "sources") {
+          sources = meta.sources || [];
+        }
+
+      } catch {
+        // Ignore a malformed meta line — just proceed without sources.
+      }
     }
 
-    if (welcome) {
-      welcome.classList.add("hidden");
-    }
+    if (metaConsumed && buffer) {
+      fullText += buffer;
 
-    const row =
-      document.createElement("div");
+      buffer = "";
 
-    row.className = "message-row assistant";
+      if (!firstChunkArrived) {
+        firstChunkArrived = true;
 
-    const avatar =
-      document.createElement("div");
-
-    avatar.className = "avatar";
-    avatar.textContent = "✦";
-
-    const wrapper =
-      document.createElement("div");
-
-    wrapper.className = "message-wrapper";
-
-    const bubble =
-      document.createElement("div");
-
-    bubble.className = "message";
-
-    const cursor =
-      document.createElement("span");
-
-    cursor.className = "typing-cursor";
-
-    wrapper.appendChild(bubble);
-    wrapper.appendChild(cursor);
-
-    row.appendChild(avatar);
-    row.appendChild(wrapper);
-
-    messages.appendChild(row);
-
-    scrollToBottom();
-
-    let index = 0;
-
-    // Reveal a few characters per tick so long replies don't
-    // take forever, but it still reads as "typing".
-    const CHARS_PER_TICK =
-      fullText.length > 400 ? 6 : 3;
-
-    const TICK_MS = 14;
-
-    const timer = setInterval(() => {
-      index += CHARS_PER_TICK;
-
-      if (index >= fullText.length) {
-        bubble.textContent = fullText;
-
-        clearInterval(timer);
-
-        cursor.remove();
-
-        resolve();
-        return;
+        removeTypingIndicator();
       }
 
-      bubble.textContent =
-        fullText.substring(0, index);
+      bubble.textContent = fullText;
 
       scrollToBottom();
-    }, TICK_MS);
-  });
+    }
+  }
+
+  cursor.remove();
+
+  if (!fullText.trim()) {
+    fullText =
+      "Sorry, I couldn't generate a response just now. Please try again.";
+
+    bubble.textContent = fullText;
+  }
+
+  renderSourcesList(wrapper, sources);
+
+  scrollToBottom();
+
+  return { text: fullText, sources };
 }
 
 
@@ -3245,77 +3554,28 @@ function setupSuggestions() {
    49. KEYBOARD
    ========================================================= */
 
-let shiftKeyIsDown = false;
-
+// Enter always behaves as a plain newline here — exactly like any
+// normal textarea — on every device and browser/webview. Sending
+// only ever happens via the Send button tap.
+//
+// This app is mobile-first, and trying to special-case "Enter to
+// send" (via keydown + preventDefault, or via pointer/touch
+// detection) turned out to be unreliable across different mobile
+// browsers/webviews: some of them insert the newline into the
+// textarea BEFORE our JS gets a chance to stop it, so a message
+// like "Hi" typed with an Enter in between could get sent as
+// "H\ni" — rendering as two broken lines instead of one message.
+//
+// Removing all custom Enter interception removes that entire class
+// of bug: the browser's native newline insertion is 100% reliable,
+// and the message that gets sent is always exactly what's visibly
+// in the box when Send is tapped — no race conditions possible.
 function setupKeyboard() {
   if (!messageInput) return;
 
   messageInput.addEventListener(
     "input",
-    event => {
-
-      // Mobile virtual keyboards (Android/Gboard especially) often
-      // don't fire a "keydown" we can reliably preventDefault() on
-      // when the user taps Return — the newline gets inserted first
-      // and an "input" event with inputType "insertLineBreak" fires
-      // after. Left uncaught, that stray "\n" sits inside the message
-      // and renders as an extra line break (white-space: pre-wrap),
-      // making even short one-line messages look broken across lines.
-      // Shift+Enter (desktop) is still allowed to insert a real
-      // newline for multi-line composing.
-      if (
-        !shiftKeyIsDown &&
-        (
-          event.inputType === "insertLineBreak" ||
-          event.inputType === "insertParagraph"
-        )
-      ) {
-
-        messageInput.value =
-          messageInput.value.replace(
-            /\n+$/,
-            ""
-          );
-
-        autoResizeTextarea();
-
-        sendMessage();
-
-        return;
-      }
-
-      autoResizeTextarea();
-    }
-  );
-
-  messageInput.addEventListener(
-    "keydown",
-    event => {
-
-      if (event.key === "Shift") {
-        shiftKeyIsDown = true;
-      }
-
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
-
-        event.preventDefault();
-
-        sendMessage();
-      }
-
-    }
-  );
-
-  messageInput.addEventListener(
-    "keyup",
-    event => {
-      if (event.key === "Shift") {
-        shiftKeyIsDown = false;
-      }
-    }
+    autoResizeTextarea
   );
 }
 
