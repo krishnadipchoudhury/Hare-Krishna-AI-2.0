@@ -409,6 +409,7 @@ button:disabled {
   box-shadow: none;
 }
 
+
 /* =========================================================
    CREATE ACCOUNT
    ========================================================= */
@@ -1743,7 +1744,21 @@ button:disabled {
   justify-content: flex-end;
 }
 
+.message-wrapper {
+  display: flex;
+
+  flex-direction: column;
+
+  min-width: 0;
+}
+
+.message-row.user .message-wrapper {
+  align-items: flex-end;
+}
+
 .message {
+  width: fit-content;
+
   max-width: min(760px, 88%);
 
   line-height: 1.65;
@@ -1812,6 +1827,71 @@ button:disabled {
   background: var(--panel-2);
 
   color: var(--text);
+}
+
+
+/* =========================================================
+   MESSAGE SOURCES (web search results used for an answer)
+   ========================================================= */
+
+.message-sources {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin-top: 10px;
+
+  padding-top: 10px;
+
+  border-top: 1px solid var(--border);
+}
+
+.message-sources-label {
+  color: var(--muted);
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  letter-spacing: .05em;
+
+  margin-right: 2px;
+}
+
+.message-source-link {
+  display: inline-block;
+
+  max-width: 220px;
+
+  overflow: hidden;
+
+  white-space: nowrap;
+
+  text-overflow: ellipsis;
+
+  background: var(--panel-2);
+
+  color: var(--accent);
+
+  font-size: 12px;
+
+  text-decoration: none;
+
+  padding: 5px 10px;
+
+  border-radius: 999px;
+
+  border: 1px solid var(--border);
+}
+
+.message-source-link:hover {
+  border-color: var(--accent);
 }
 
 
@@ -1997,6 +2077,8 @@ button:disabled {
   min-width: 0;
 
   max-height: 180px;
+
+  overflow-y: auto;
 
   resize: none;
 
