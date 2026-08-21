@@ -1763,8 +1763,6 @@ button:disabled {
 
   line-height: 1.65;
 
-  white-space: pre-wrap;
-
   overflow-wrap: break-word;
 
   word-break: normal;
@@ -1776,6 +1774,166 @@ button:disabled {
   padding: 11px 15px;
 
   border-radius: 18px 18px 5px 18px;
+
+  white-space: pre-wrap;
+}
+
+
+/* =========================================================
+   RENDERED MARKDOWN (assistant replies)
+   ========================================================= */
+
+.assistant .message p {
+  margin: 0 0 12px;
+}
+
+.assistant .message p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant .message h1,
+.assistant .message h2,
+.assistant .message h3,
+.assistant .message h4 {
+  margin: 18px 0 8px;
+
+  line-height: 1.35;
+}
+
+.assistant .message h1:first-child,
+.assistant .message h2:first-child,
+.assistant .message h3:first-child,
+.assistant .message h4:first-child {
+  margin-top: 0;
+}
+
+.assistant .message h1 { font-size: 1.35em; }
+.assistant .message h2 { font-size: 1.2em; }
+.assistant .message h3 { font-size: 1.08em; }
+.assistant .message h4 { font-size: 1em; }
+
+.assistant .message strong {
+  font-weight: 700;
+}
+
+.assistant .message em {
+  font-style: italic;
+}
+
+.assistant .message ul,
+.assistant .message ol {
+  margin: 0 0 12px;
+
+  padding-left: 22px;
+}
+
+.assistant .message li {
+  margin: 4px 0;
+}
+
+.assistant .message li > ul,
+.assistant .message li > ol {
+  margin: 4px 0 0;
+}
+
+.assistant .message a {
+  color: var(--accent);
+
+  text-decoration: underline;
+
+  text-underline-offset: 2px;
+}
+
+.assistant .message code {
+  background: var(--panel-2);
+
+  border: 1px solid var(--border);
+
+  border-radius: 5px;
+
+  padding: 1px 6px;
+
+  font-size: .9em;
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+.assistant .message pre {
+  background: var(--panel-2);
+
+  border: 1px solid var(--border);
+
+  border-radius: 10px;
+
+  padding: 12px 14px;
+
+  margin: 0 0 12px;
+
+  overflow-x: auto;
+}
+
+.assistant .message pre code {
+  background: none;
+
+  border: 0;
+
+  padding: 0;
+
+  font-size: .88em;
+
+  white-space: pre;
+}
+
+.assistant .message blockquote {
+  margin: 0 0 12px;
+
+  padding: 2px 14px;
+
+  border-left: 3px solid var(--accent);
+
+  color: var(--muted);
+}
+
+.assistant .message hr {
+  border: 0;
+
+  border-top: 1px solid var(--border);
+
+  margin: 16px 0;
+}
+
+.assistant .message table {
+  width: 100%;
+
+  border-collapse: collapse;
+
+  margin: 0 0 12px;
+
+  font-size: .93em;
+
+  display: block;
+
+  overflow-x: auto;
+}
+
+.assistant .message th,
+.assistant .message td {
+  border: 1px solid var(--border);
+
+  padding: 7px 10px;
+
+  text-align: left;
+}
+
+.assistant .message th {
+  background: var(--panel-2);
+
+  font-weight: 700;
 }
 
 .assistant .message {
@@ -1965,9 +2123,23 @@ button:disabled {
 
   align-items: center;
 
-  gap: 5px;
+  gap: 8px;
 
   height: 24px;
+}
+
+.typing-label {
+  color: var(--muted);
+
+  font-size: 13.5px;
+}
+
+.typing-dots {
+  display: flex;
+
+  align-items: center;
+
+  gap: 5px;
 }
 
 .dot {
