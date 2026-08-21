@@ -1993,6 +1993,46 @@ function renderSourcesList(container, sources) {
 
 
 /* =========================================================
+   26c. MARKDOWN RENDERING (assistant replies only)
+   =========================================================
+   The AI's answers come back as Markdown (bold, tables,
+   headers, lists, line breaks). marked.js turns that into
+   HTML; DOMPurify sanitizes it before it ever touches the
+   page, since this text is AI-generated and not something
+   we should trust blindly. User messages are never run
+   through this — they stay as plain escaped text.
+   ========================================================= */
+
+function renderMarkdownSafe(rawText) {
+  const text = String(rawText || "");
+
+  if (!text) return "";
+
+  if (
+    typeof window.marked === "undefined" ||
+    typeof window.DOMPurify === "undefined"
+  ) {
+    // CDN scripts didn't load (offline, blocked, etc.) — fall
+    // back to plain escaped text rather than breaking the page.
+    const escaped =
+      document.createElement("div");
+
+    escaped.textContent = text;
+
+    return escaped.innerHTML.replace(/\n/g, "<br>");
+  }
+
+  const html =
+    window.marked.parse(text, {
+      breaks: true,
+      gfm: true
+    });
+
+  return window.DOMPurify.sanitize(html);
+}
+
+
+/* =========================================================
    27. RENDER MESSAGE
    ========================================================= */
 
@@ -2040,8 +2080,14 @@ function renderMessage(
   bubble.className =
     "message";
 
-  bubble.textContent =
-    message.content || "";
+  if (message.role === "assistant") {
+    bubble.innerHTML =
+      renderMarkdownSafe(message.content);
+
+  } else {
+    bubble.textContent =
+      message.content || "";
+  }
 
   wrapper.appendChild(bubble);
 
@@ -2236,7 +2282,7 @@ async function sendMessage() {
 
   sendBtn.disabled = true;
 
-  showTypingIndicator();
+  showTypingIndicator("Thinking...");
 
   try {
 
@@ -2760,9 +2806,13 @@ async function streamAssistantMessage(userText) {
   if (!fullText.trim()) {
     fullText =
       "Sorry, I couldn't generate a response just now. Please try again.";
-
-    bubble.textContent = fullText;
   }
+
+  // Plain text while streaming (fast, no flicker on partial
+  // markdown like an unclosed "**"); switch to fully rendered
+  // markdown now that the complete answer is in.
+  bubble.innerHTML =
+    renderMarkdownSafe(fullText);
 
   renderSourcesList(wrapper, sources);
 
@@ -2776,7 +2826,7 @@ async function streamAssistantMessage(userText) {
    32. TYPING INDICATOR
    ========================================================= */
 
-function showTypingIndicator() {
+function showTypingIndicator(label) {
   if (!messages) return;
 
   removeTypingIndicator();
@@ -2804,10 +2854,27 @@ function showTypingIndicator() {
   typing.className =
     "typing";
 
-  typing.innerHTML =
+  if (label) {
+    const labelSpan =
+      document.createElement("span");
+
+    labelSpan.className = "typing-label";
+    labelSpan.textContent = label;
+
+    typing.appendChild(labelSpan);
+  }
+
+  const dots =
+    document.createElement("span");
+
+  dots.className = "typing-dots";
+
+  dots.innerHTML =
     "<span class='dot'></span>" +
     "<span class='dot'></span>" +
     "<span class='dot'></span>";
+
+  typing.appendChild(dots);
 
   row.appendChild(avatar);
   row.appendChild(typing);
