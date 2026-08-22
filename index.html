@@ -806,6 +806,20 @@
 
 
   <!-- =====================================================
+       MARKDOWN RENDERING FOR AI REPLIES
+       marked.js converts the AI's Markdown (bold, tables,
+       headers, line breaks, etc.) into HTML. DOMPurify then
+       sanitizes that HTML before it's ever inserted into the
+       page, since the text is AI-generated and shouldn't be
+       trusted blindly.
+       ===================================================== -->
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+
+
+  <!-- =====================================================
        YOUR APPLICATION
        ===================================================== -->
 
