@@ -82,6 +82,80 @@ const SUPPORT_EMAIL = "krishnadipchoudhury51@gmail.com";
 
 
 /* =========================================================
+   ICON LIBRARY (outline SVGs, no emoji)
+   ========================================================= */
+
+const ICONS = {
+
+  pencil:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='#000000' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<path d='M12 20h9'></path>" +
+    "<path d='M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z'></path>" +
+    "</svg>",
+
+  trash:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='#e5484d' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<path d='M3 6h18'></path>" +
+    "<path d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'></path>" +
+    "<path d='M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6'></path>" +
+    "<line x1='10' y1='11' x2='10' y2='17'></line>" +
+    "<line x1='14' y1='11' x2='14' y2='17'></line>" +
+    "</svg>",
+
+  thumbsUp:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<path d='M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7" +
+    "l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3'>" +
+    "</path>" +
+    "</svg>",
+
+  thumbsDown:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<path d='M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7" +
+    "l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3'>" +
+    "</path>" +
+    "</svg>",
+
+  selectText:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<polyline points='4 7 4 4 20 4 20 7'></polyline>" +
+    "<line x1='9' y1='20' x2='15' y2='20'></line>" +
+    "<line x1='12' y1='4' x2='12' y2='20'></line>" +
+    "</svg>",
+
+  regenerate:
+    "<svg viewBox='0 0 24 24' width='15' height='15' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<polyline points='23 4 23 10 17 10'></polyline>" +
+    "<polyline points='1 20 1 14 7 14'></polyline>" +
+    "<path d='M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36" +
+    "A9 9 0 0 0 20.49 15'></path>" +
+    "</svg>",
+
+  moreDots:
+    "<svg viewBox='0 0 24 24' width='16' height='16' fill='none' " +
+    "stroke='currentColor' stroke-width='2' stroke-linecap='round' " +
+    "stroke-linejoin='round'>" +
+    "<circle cx='5' cy='12' r='1.5'></circle>" +
+    "<circle cx='12' cy='12' r='1.5'></circle>" +
+    "<circle cx='19' cy='12' r='1.5'></circle>" +
+    "</svg>"
+
+};
+
+
+/* =========================================================
    4. DOM HELPERS
    ========================================================= */
 
@@ -1702,7 +1776,7 @@ function toggleChatMenu(chatId, item, menuButton) {
   renameBtn.type = "button";
 
   renameBtn.innerHTML =
-    "<span class='menu-icon'>✎</span><span>Rename</span>";
+    "<span class='menu-icon'>" + ICONS.pencil + "</span><span>Rename</span>";
 
   renameBtn.addEventListener(
     "click",
@@ -1723,7 +1797,7 @@ function toggleChatMenu(chatId, item, menuButton) {
   deleteBtn.className = "danger";
 
   deleteBtn.innerHTML =
-    "<span class='menu-icon'>🗑</span><span>Delete</span>";
+    "<span class='menu-icon'>" + ICONS.trash + "</span><span>Delete</span>";
 
   deleteBtn.addEventListener(
     "click",
@@ -2135,6 +2209,82 @@ function renderMessage(
       copyButton
     );
 
+    const moreButton =
+      document.createElement("button");
+
+    moreButton.className =
+      "message-action message-more-btn";
+
+    moreButton.type = "button";
+    moreButton.title = "More options";
+    moreButton.setAttribute(
+      "aria-label",
+      "More options"
+    );
+
+    moreButton.innerHTML =
+      ICONS.moreDots;
+
+    moreButton.addEventListener(
+      "click",
+      event => {
+        event.stopPropagation();
+
+        toggleMessageMenu(
+          index,
+          message,
+          bubble,
+          actions,
+          moreButton
+        );
+      }
+    );
+
+    actions.appendChild(
+      moreButton
+    );
+
+    wrapper.appendChild(
+      actions
+    );
+
+  } else {
+
+    const actions =
+      document.createElement("div");
+
+    actions.className =
+      "message-actions";
+
+    const editButton =
+      document.createElement("button");
+
+    editButton.className =
+      "message-action";
+
+    editButton.type = "button";
+
+    editButton.innerHTML =
+      "<span class='menu-icon'>" +
+      ICONS.pencil +
+      "</span><span>Edit</span>";
+
+    editButton.addEventListener(
+      "click",
+      () => {
+        startEditUserMessage(
+          index,
+          row,
+          bubble,
+          actions
+        );
+      }
+    );
+
+    actions.appendChild(
+      editButton
+    );
+
     wrapper.appendChild(
       actions
     );
@@ -2143,6 +2293,392 @@ function renderMessage(
   row.appendChild(wrapper);
 
   messages.appendChild(row);
+}
+
+
+/* =========================================================
+   27b. ASSISTANT MESSAGE MENU
+   =========================================================  
+   The "⋯" button below an AI reply — Like / Dislike / Select
+   text / Regenerate.
+   ========================================================= */
+
+function closeAllMessageMenus() {
+  document
+    .querySelectorAll(".message-menu-popup")
+    .forEach(popup => popup.remove());
+
+  document
+    .querySelectorAll(".message-more-btn.open")
+    .forEach(button => button.classList.remove("open"));
+}
+
+document.addEventListener("click", closeAllMessageMenus);
+
+function toggleMessageMenu(
+  index,
+  message,
+  bubble,
+  actionsContainer,
+  menuButton
+) {
+  const alreadyOpen =
+    menuButton.classList.contains("open");
+
+  closeAllMessageMenus();
+
+  if (alreadyOpen) return;
+
+  menuButton.classList.add("open");
+
+  const popup =
+    document.createElement("div");
+
+  popup.className = "message-menu-popup";
+
+  // --- Like / Dislike ---
+
+  const feedbackRow =
+    document.createElement("div");
+
+  feedbackRow.className =
+    "message-menu-feedback-row";
+
+  const likeBtn =
+    document.createElement("button");
+
+  likeBtn.type = "button";
+
+  likeBtn.className =
+    "message-feedback-btn" +
+    (
+      message.feedback === "like"
+        ? " active-like"
+        : ""
+    );
+
+  likeBtn.title = "Like";
+  likeBtn.innerHTML = ICONS.thumbsUp;
+
+  likeBtn.addEventListener(
+    "click",
+    event => {
+      event.stopPropagation();
+
+      setMessageFeedback(index, "like");
+
+      closeAllMessageMenus();
+    }
+  );
+
+  const dislikeBtn =
+    document.createElement("button");
+
+  dislikeBtn.type = "button";
+
+  dislikeBtn.className =
+    "message-feedback-btn" +
+    (
+      message.feedback === "dislike"
+        ? " active-dislike"
+        : ""
+    );
+
+  dislikeBtn.title = "Dislike";
+  dislikeBtn.innerHTML = ICONS.thumbsDown;
+
+  dislikeBtn.addEventListener(
+    "click",
+    event => {
+      event.stopPropagation();
+
+      setMessageFeedback(index, "dislike");
+
+      closeAllMessageMenus();
+    }
+  );
+
+  feedbackRow.appendChild(likeBtn);
+  feedbackRow.appendChild(dislikeBtn);
+
+  popup.appendChild(feedbackRow);
+
+  // --- Select text ---
+
+  const selectBtn =
+    document.createElement("button");
+
+  selectBtn.type = "button";
+
+  selectBtn.innerHTML =
+    "<span class='menu-icon'>" +
+    ICONS.selectText +
+    "</span><span>Select text</span>";
+
+  selectBtn.addEventListener(
+    "click",
+    event => {
+      event.stopPropagation();
+
+      closeAllMessageMenus();
+
+      selectMessageText(bubble);
+    }
+  );
+
+  popup.appendChild(selectBtn);
+
+  // --- Regenerate ---
+
+  const regenerateBtn =
+    document.createElement("button");
+
+  regenerateBtn.type = "button";
+
+  regenerateBtn.innerHTML =
+    "<span class='menu-icon'>" +
+    ICONS.regenerate +
+    "</span><span>Regenerate</span>";
+
+  regenerateBtn.addEventListener(
+    "click",
+    event => {
+      event.stopPropagation();
+
+      closeAllMessageMenus();
+
+      regenerateResponse(index);
+    }
+  );
+
+  popup.appendChild(regenerateBtn);
+
+  actionsContainer.appendChild(popup);
+}
+
+function setMessageFeedback(index, value) {
+  const chat =
+    getCurrentChat();
+
+  if (!chat) return;
+
+  const message =
+    chat.messages[index];
+
+  if (!message) return;
+
+  // Tapping the same feedback again clears it (toggle).
+  message.feedback =
+    message.feedback === value
+      ? null
+      : value;
+
+  chat.updatedAt = Date.now();
+
+  saveGuestChats();
+
+  if (!isGuest && currentUser) {
+    saveChatToFirestore(chat);
+  }
+
+  renderCurrentChat();
+
+  showToast(
+    message.feedback === "like"
+      ? "Marked as liked"
+      : message.feedback === "dislike"
+        ? "Marked as disliked"
+        : "Feedback removed"
+  );
+}
+
+function selectMessageText(bubble) {
+  if (!bubble) return;
+
+  try {
+    const range =
+      document.createRange();
+
+    range.selectNodeContents(bubble);
+
+    const selection =
+      window.getSelection();
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+  } catch (error) {
+    console.error(
+      "Select text error:",
+      error
+    );
+  }
+}
+
+async function regenerateResponse(index) {
+  if (isGenerating) return;
+
+  const chat =
+    getCurrentChat();
+
+  if (!chat) return;
+
+  // Find the user message this reply was answering.
+  let userText = null;
+
+  for (let i = index - 1; i >= 0; i--) {
+    if (chat.messages[i].role === "user") {
+      userText = chat.messages[i].content;
+      break;
+    }
+  }
+
+  if (userText === null) return;
+
+  // Drop this reply and anything after it — a fresh one takes
+  // its place, same as editing a user message further up.
+  chat.messages =
+    chat.messages.slice(0, index);
+
+  chat.updatedAt = Date.now();
+
+  saveGuestChats();
+
+  renderChatList();
+  renderCurrentChat();
+
+  await generateAndAppendAssistantReply(userText);
+}
+
+
+/* =========================================================
+   27c. EDIT USER MESSAGE
+   ========================================================= */
+
+function startEditUserMessage(
+  index,
+  row,
+  bubble,
+  actions
+) {
+  if (isGenerating) return;
+
+  const chat =
+    getCurrentChat();
+
+  if (!chat) return;
+
+  const message =
+    chat.messages[index];
+
+  if (!message) return;
+
+  const wrapper =
+    row.querySelector(".message-wrapper");
+
+  if (!wrapper) return;
+
+  const editBox =
+    document.createElement("div");
+
+  editBox.className = "edit-box";
+
+  const textarea =
+    document.createElement("textarea");
+
+  textarea.value = message.content || "";
+
+  const editActions =
+    document.createElement("div");
+
+  editActions.className = "edit-actions";
+
+  const cancelBtn =
+    document.createElement("button");
+
+  cancelBtn.type = "button";
+  cancelBtn.className = "small-btn";
+  cancelBtn.textContent = "Cancel";
+
+  cancelBtn.addEventListener(
+    "click",
+    () => {
+      editBox.remove();
+
+      bubble.style.display = "";
+      actions.style.display = "";
+    }
+  );
+
+  const saveBtn =
+    document.createElement("button");
+
+  saveBtn.type = "button";
+  saveBtn.className = "small-btn primary";
+  saveBtn.textContent = "Save & Submit";
+
+  saveBtn.addEventListener(
+    "click",
+    () => {
+      const newText =
+        textarea.value.trim();
+
+      if (!newText) return;
+
+      submitEditedMessage(index, newText);
+    }
+  );
+
+  editActions.appendChild(cancelBtn);
+  editActions.appendChild(saveBtn);
+
+  editBox.appendChild(textarea);
+  editBox.appendChild(editActions);
+
+  bubble.style.display = "none";
+  actions.style.display = "none";
+
+  wrapper.insertBefore(
+    editBox,
+    actions
+  );
+
+  textarea.focus();
+
+  textarea.selectionStart =
+    textarea.value.length;
+
+  textarea.style.height = "auto";
+  textarea.style.height =
+    textarea.scrollHeight + "px";
+}
+
+async function submitEditedMessage(index, newText) {
+  if (isGenerating) return;
+
+  const chat =
+    getCurrentChat();
+
+  if (!chat) return;
+
+  // Editing a message replaces the conversation from this point
+  // on — this message plus anything after it (including the old
+  // AI reply) is dropped, then re-sent as if freshly typed.
+  chat.messages =
+    chat.messages.slice(0, index);
+
+  chat.updatedAt = Date.now();
+
+  saveGuestChats();
+
+  renderChatList();
+  renderCurrentChat();
+
+  messageInput.value = newText;
+
+  autoResizeTextarea();
+
+  await sendMessage();
 }
 
 
@@ -2184,7 +2720,10 @@ async function addMessage(
 
   renderChatList();
 
-  appendMessageIncremental(message);
+  appendMessageIncremental(
+    message,
+    chat.messages.length - 1
+  );
 
   if (
     !isGuest &&
@@ -2208,7 +2747,7 @@ async function addMessage(
    persisted message replaces it cleanly instead of stacking.
    ========================================================= */
 
-function appendMessageIncremental(message) {
+function appendMessageIncremental(message, index) {
   if (!messages) return;
 
   if (welcome) {
@@ -2222,7 +2761,7 @@ function appendMessageIncremental(message) {
     tempReveal.remove();
   }
 
-  renderMessage(message);
+  renderMessage(message, index);
 
   scrollToBottom();
 }
@@ -2278,11 +2817,24 @@ async function sendMessage() {
     text
   );
 
+  await generateAndAppendAssistantReply(text);
+}
+
+
+/* =========================================================
+   30a. GENERATE + APPEND ASSISTANT REPLY
+   =========================================================
+   Shared by sendMessage() and Regenerate — runs the real AI
+   (search + streaming), falls back to the local demo engine
+   if the backend is unreachable, and persists the result.
+   ========================================================= */
+
+async function generateAndAppendAssistantReply(userText) {
   isGenerating = true;
 
   sendBtn.disabled = true;
 
-  showTypingIndicator("Thinking...");
+  showTypingIndicator("Searching the web");
 
   try {
 
@@ -2293,7 +2845,7 @@ async function sendMessage() {
       // via the /api/chat serverless function.
       result =
         await streamAssistantMessage(
-          text
+          userText
         );
 
     } catch (apiError) {
@@ -2309,7 +2861,7 @@ async function sendMessage() {
       // cleanly by addMessage()'s incremental append either way.
       const fallbackText =
         await generateLocalResponse(
-          text
+          userText
         );
 
       removeTypingIndicator();
