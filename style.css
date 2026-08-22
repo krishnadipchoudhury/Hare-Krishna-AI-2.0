@@ -832,11 +832,13 @@ button:disabled {
 }
 
 .chat-menu-popup .menu-icon {
-  font-size: 15px;
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
 
   width: 16px;
-
-  text-align: center;
 
   flex: 0 0 auto;
 }
@@ -1960,7 +1962,11 @@ button:disabled {
 }
 
 .message-actions {
+  position: relative;
+
   display: flex;
+
+  align-items: center;
 
   gap: 4px;
 
@@ -1968,6 +1974,12 @@ button:disabled {
 }
 
 .message-action {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
   border: 0;
 
   background: transparent;
@@ -1981,10 +1993,157 @@ button:disabled {
   font-size: 12px;
 }
 
+.message-action .menu-icon {
+  display: flex;
+
+  align-items: center;
+}
+
 .message-action:hover {
   background: var(--panel-2);
 
   color: var(--text);
+}
+
+.message-more-btn {
+  padding: 5px 6px;
+}
+
+.message-more-btn.open {
+  background: var(--panel-2);
+
+  color: var(--text);
+}
+
+
+/* =========================================================
+   MESSAGE MENU (Like / Dislike / Select text / Regenerate)
+   ========================================================= */
+
+.message-menu-popup {
+  position: absolute;
+
+  bottom: calc(100% + 6px);
+
+  right: 0;
+
+  z-index: 50;
+
+  min-width: 175px;
+
+  background: var(--panel);
+
+  border: 1px solid var(--border);
+
+  border-radius: 12px;
+
+  box-shadow: var(--shadow);
+
+  padding: 6px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 2px;
+
+  animation: menuPop .12s ease;
+}
+
+.message-menu-feedback-row {
+  display: flex;
+
+  gap: 6px;
+
+  padding: 3px 3px 7px;
+
+  margin-bottom: 4px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.message-feedback-btn {
+  flex: 1;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border: 1px solid var(--border);
+
+  background: transparent;
+
+  color: var(--muted);
+
+  padding: 7px 0;
+
+  border-radius: 8px;
+}
+
+.message-feedback-btn:hover {
+  background: var(--panel-2);
+}
+
+.message-feedback-btn.active-like {
+  color: #2f9e44;
+
+  border-color: #2f9e44;
+
+  background: rgba(47, 158, 68, .1);
+}
+
+.message-feedback-btn.active-dislike {
+  color: var(--danger);
+
+  border-color: var(--danger);
+
+  background: rgba(229, 72, 77, .1);
+}
+
+.message-menu-popup > button {
+  display: flex;
+
+  align-items: center;
+
+  gap: 9px;
+
+  width: 100%;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--text);
+
+  font-size: 14px;
+
+  font-family: inherit;
+
+  padding: 9px 10px;
+
+  border-radius: 8px;
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.message-menu-popup > button:hover {
+  background: var(--panel-2);
+}
+
+.message-menu-popup .menu-icon {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 16px;
+
+  flex: 0 0 auto;
 }
 
 
