@@ -1961,6 +1961,23 @@ button:disabled {
   font-size: 15px;
 }
 
+/* The pending row is created with its avatar already in place
+   (so nothing shifts layout later) but invisible until real
+   content actually arrives — see activateAssistantRowAvatar(). */
+.no-avatar .avatar {
+  visibility: hidden;
+}
+
+.status-message {
+  display: flex;
+
+  align-items: center;
+
+  gap: 8px;
+
+  min-height: 24px;
+}
+
 .message-actions {
   position: relative;
 
