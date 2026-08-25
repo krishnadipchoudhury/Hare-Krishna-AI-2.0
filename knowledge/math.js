@@ -1,33 +1,22 @@
 // knowledge/math.js
 //
-// Hare Krishna AI 2.0 — Professional Math Engine
+// Hare Krishna AI 2.0 — Advanced Math Engine
 //
-// Supports:
-//   +  -  *  /  ^
-//   ×  ÷
-//   parentheses
-//   decimals
-//   negative numbers
-//   scientific notation
-//   multiline expressions
-//
-// The goal is:
-//   1. Always calculate deterministically.
-//   2. Give short, natural explanations.
-//   3. Bold important mathematical information.
-//   4. Avoid unnecessary repeated explanations.
-//   5. Return null for non-mathematical messages.
-//
-// Examples:
-//
-//   6 + 7 + 2
-//   15 + 8 × 2
-//   (15 + 8) × 2
-//   2 ^ 5
-//   -2 ^ 2
-//   2 ^ -2
-//   2.5 × 4
-//   1.2e3 / 3
+// Features:
+//   • Natural-language math recognition
+//   • Unicode superscripts: 5⁹⁹
+//   • Normal powers: 5^99
+//   • "5 to the power 99"
+//   • "5 raised to 99"
+//   • "5 squared", "5 cubed"
+//   • +, -, ×, ÷, *, /
+//   • Parentheses
+//   • Decimals
+//   • Negative numbers
+//   • Scientific notation
+//   • Exact BigInt arithmetic for large integers
+//   • Short, natural explanations
+//   • Existing trySolveMath() / explainMathSolution() API
 //
 // No external dependencies.
 
@@ -36,30 +25,44 @@
 // CONFIGURATION
 // ============================================================
 
-const MAX_INPUT_LENGTH = 500;
-const MAX_TOKENS = 200;
+const MAX_INPUT_LENGTH = 1000;
+const MAX_TOKENS = 300;
+
+// Maximum exponent for exact BigInt powers.
+// This prevents accidentally creating absurdly huge values.
+const MAX_BIGINT_EXPONENT = 100000;
 
 
 // ============================================================
-// NORMALIZE INPUT
+// SUPERSCRIPT SUPPORT
 // ============================================================
 
-function normalizeExpression(raw) {
-  return String(raw ?? "")
-    // Multiplication / division symbols
-    .replace(/×/g, "*")
-    .replace(/÷/g, "/")
+const SUPERSCRIPT_MAP = {
+  "⁰": "0",
+  "¹": "1",
+  "²": "2",
+  "³": "3",
+  "⁴": "4",
+  "⁵": "5",
+  "⁶": "6",
+  "⁷": "7",
+  "⁸": "8",
+  "⁹": "9",
+  "⁺": "+",
+  "⁻": "-",
+  "⁽": "(",
+  "⁾": ")"
+};
 
-    // Different Unicode minus characters
-    .replace(/[−–—]/g, "-")
-
-    // Other multiplication symbols
-    .replace(/[·∙⋅]/g, "*")
-
-    // Normalize whitespace and line breaks
-    .replace(/\s+/g, " ")
-
-    .trim();
+function superscriptToNormal(text) {
+  return String(text).replace(
+    /[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾]+/g,
+    match =>
+      match
+        .split("")
+        .map(ch => SUPERSCRIPT_MAP[ch] ?? ch)
+        .join("")
+  );
 }
 
 
@@ -67,19 +70,32 @@ function normalizeExpression(raw) {
 // NUMBER FORMATTING
 // ============================================================
 
+function formatBigInt(value) {
+  const text = value.toString();
+
+  return text.replace(
+    /\B(?=(\d{3})+(?!\d))/g,
+    ","
+  );
+}
+
 function formatNumber(value) {
+  if (typeof value === "bigint") {
+    return formatBigInt(value);
+  }
+
   if (!Number.isFinite(value)) {
     return String(value);
   }
 
-  // Remove negative zero.
   if (Object.is(value, -0)) {
     return "0";
   }
 
-  // Reduce normal floating-point noise.
   const rounded =
-    Math.round((value + Number.EPSILON) * 1e12) / 1e12;
+    Math.round(
+      (value + Number.EPSILON) * 1e12
+    ) / 1e12;
 
   if (Object.is(rounded, -0)) {
     return "0";
@@ -89,7 +105,6 @@ function formatNumber(value) {
     return String(value);
   }
 
-  // Normal decimal representation.
   if (
     Math.abs(rounded) >= 1e-6 &&
     Math.abs(rounded) < 1e15
@@ -97,25 +112,177 @@ function formatNumber(value) {
     return String(rounded);
   }
 
-  // Scientific notation for very large/small values.
-  return Number(rounded.toPrecision(12)).toString();
+  return Number(
+    rounded.toPrecision(12)
+  ).toString();
+}
+
+function formatValue(value) {
+  return formatNumber(value);
 }
 
 
 // ============================================================
-// OPERATOR DISPLAY
+// OPERATOR SYMBOLS
 // ============================================================
 
 function opSymbol(op) {
-  const symbols = {
+  return {
     "+": "+",
     "-": "−",
     "*": "×",
     "/": "÷",
     "^": "^"
-  };
+  }[op] || op;
+}
 
-  return symbols[op] || op;
+
+// ============================================================
+// NATURAL-LANGUAGE MATH EXTRACTION
+// ============================================================
+
+function extractMathExpression(raw) {
+  let text = String(raw ?? "").trim();
+
+  if (!text) {
+    return null;
+  }
+
+  // Convert:
+  // 5⁹⁹ → 5^99
+  text = superscriptToNormal(text);
+
+  // ----------------------------------------------------------
+  // Mathematical words
+  // ----------------------------------------------------------
+
+  text = text
+    .replace(
+      /\b(raised to the power of|raised to the power|to the power of|to the power)\b/gi,
+      "^"
+    )
+    .replace(
+      /\b(squared)\b/gi,
+      "^2"
+    )
+    .replace(
+      /\b(cubed)\b/gi,
+      "^3"
+    )
+    .replace(
+      /\b(multiplied by)\b/gi,
+      "*"
+    )
+    .replace(
+      /\b(divided by)\b/gi,
+      "/"
+    );
+
+  // ----------------------------------------------------------
+  // Natural-language prefixes
+  // ----------------------------------------------------------
+
+  text = text.replace(
+    /^\s*please\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*can\s+you\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*could\s+you\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*would\s+you\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*help\s+me\s+to\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*help\s+me\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*(solve|calculate|compute|evaluate|find|answer|work\s*out)\s*:?\s*/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*(what\s+is|what's|whats)\s*:?\s*/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*tell\s+me\s+(the\s+)?(answer|value)\s+(of|for)\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*find\s+(the\s+)?(value|answer)\s+(of|for)\s+/i,
+    ""
+  );
+
+  text = text.replace(
+    /^\s*what\s+is\s+the\s+value\s+of\s+/i,
+    ""
+  );
+
+  // ----------------------------------------------------------
+  // Remove trailing punctuation.
+  // ----------------------------------------------------------
+
+  text = text
+    .replace(/[?!.]+\s*$/g, "")
+    .trim();
+
+  if (!text) {
+    return null;
+  }
+
+  // ----------------------------------------------------------
+  // Try to extract the mathematical expression from
+  // remaining natural language.
+  //
+  // Example:
+  // "5^99 please"
+  // "please solve 5^99"
+  // "can you calculate 15 + 8 × 2"
+  // ----------------------------------------------------------
+
+  const match = text.match(
+    /[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?(?:\s*[\^+\-*/×÷]\s*[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?|\s*[()])*/i
+  );
+
+  if (match && match[0]) {
+    return match[0].trim();
+  }
+
+  return text;
+}
+
+
+// ============================================================
+// NORMALIZATION
+// ============================================================
+
+function normalizeExpression(raw) {
+  return String(raw ?? "")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/")
+    .replace(/[−–—]/g, "-")
+    .replace(/[·∙⋅]/g, "*")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 
@@ -130,7 +297,6 @@ function tokenize(expr) {
   while (i < expr.length) {
     const ch = expr[i];
 
-    // Ignore spaces.
     if (/\s/.test(ch)) {
       i++;
       continue;
@@ -146,7 +312,6 @@ function tokenize(expr) {
       let hasDigits = false;
       let hasDot = false;
 
-      // Integer / decimal part.
       while (i < expr.length) {
         const current = expr[i];
 
@@ -158,7 +323,7 @@ function tokenize(expr) {
 
         if (current === ".") {
           if (hasDot) {
-            throw new Error("Invalid decimal number");
+            throw new Error("Invalid decimal");
           }
 
           hasDot = true;
@@ -173,15 +338,17 @@ function tokenize(expr) {
         throw new Error("Invalid number");
       }
 
-      // ------------------------------------------------------
-      // Scientific notation
-      // Example: 2.5e3
-      // ------------------------------------------------------
-
-      if (expr[i] === "e" || expr[i] === "E") {
+      // Scientific notation.
+      if (
+        expr[i] === "e" ||
+        expr[i] === "E"
+      ) {
         i++;
 
-        if (expr[i] === "+" || expr[i] === "-") {
+        if (
+          expr[i] === "+" ||
+          expr[i] === "-"
+        ) {
           i++;
         }
 
@@ -195,11 +362,15 @@ function tokenize(expr) {
         }
 
         if (i === exponentStart) {
-          throw new Error("Invalid scientific notation");
+          throw new Error(
+            "Invalid scientific notation"
+          );
         }
       }
 
-      const rawNumber = expr.slice(start, i);
+      const rawNumber =
+        expr.slice(start, i);
+
       const value = Number(rawNumber);
 
       if (!Number.isFinite(value)) {
@@ -208,7 +379,8 @@ function tokenize(expr) {
 
       tokens.push({
         type: "number",
-        value
+        value,
+        raw: rawNumber
       });
 
       if (tokens.length > MAX_TOKENS) {
@@ -236,7 +408,6 @@ function tokenize(expr) {
       continue;
     }
 
-    // Anything else is not pure arithmetic.
     throw new Error("Unknown character");
   }
 
@@ -247,36 +418,6 @@ function tokenize(expr) {
 // ============================================================
 // PARSER
 // ============================================================
-//
-// Grammar:
-//
-// expression
-//   → addition/subtraction
-//
-// addition/subtraction
-//   → multiplication/division
-//
-// multiplication/division
-//   → unary
-//
-// unary
-//   → + unary
-//   → - unary
-//   → power
-//
-// power
-//   → primary ^ unary
-//   → primary
-//
-// primary
-//   → number
-//   → ( expression )
-//
-// This gives normal mathematical precedence:
-//
-//   -2^2 = -4
-//   2^-2 = 0.25
-//
 
 function parseExpression(tokens) {
   let position = 0;
@@ -305,30 +446,30 @@ function parseExpression(tokens) {
 
       return {
         type: "number",
-        value: token.value
+        value: token.value,
+        raw: token.raw
       };
     }
 
     if (token.type === "(") {
       consume();
 
-      const node = parseAddSub();
+      const child = parseAddSub();
 
       if (!peek() || peek().type !== ")") {
-        throw new Error("Missing closing parenthesis");
+        throw new Error("Missing parenthesis");
       }
 
       consume();
 
       return {
         type: "group",
-        child: node
+        child
       };
     }
 
-    throw new Error("Expected number or parenthesis");
+    throw new Error("Expected number");
   }
-
 
   // ----------------------------------------------------------
   // POWER
@@ -340,8 +481,6 @@ function parseExpression(tokens) {
     if (peek() && peek().type === "^") {
       consume();
 
-      // Right side uses unary so:
-      // 2^-2 works correctly.
       const right = parseUnary();
 
       return {
@@ -355,7 +494,6 @@ function parseExpression(tokens) {
     return left;
   }
 
-
   // ----------------------------------------------------------
   // UNARY
   // ----------------------------------------------------------
@@ -367,29 +505,21 @@ function parseExpression(tokens) {
       throw new Error("Unexpected end");
     }
 
-    if (token.type === "+") {
+    if (
+      token.type === "+" ||
+      token.type === "-"
+    ) {
       consume();
 
       return {
         type: "unary",
-        op: "+",
-        operand: parseUnary()
-      };
-    }
-
-    if (token.type === "-") {
-      consume();
-
-      return {
-        type: "unary",
-        op: "-",
+        op: token.type,
         operand: parseUnary()
       };
     }
 
     return parsePower();
   }
-
 
   // ----------------------------------------------------------
   // MULTIPLICATION / DIVISION
@@ -400,8 +530,10 @@ function parseExpression(tokens) {
 
     while (
       peek() &&
-      (peek().type === "*" ||
-        peek().type === "/")
+      (
+        peek().type === "*" ||
+        peek().type === "/"
+      )
     ) {
       const op = consume();
 
@@ -418,7 +550,6 @@ function parseExpression(tokens) {
     return node;
   }
 
-
   // ----------------------------------------------------------
   // ADDITION / SUBTRACTION
   // ----------------------------------------------------------
@@ -428,8 +559,10 @@ function parseExpression(tokens) {
 
     while (
       peek() &&
-      (peek().type === "+" ||
-        peek().type === "-")
+      (
+        peek().type === "+" ||
+        peek().type === "-"
+      )
     ) {
       const op = consume();
 
@@ -446,14 +579,299 @@ function parseExpression(tokens) {
     return node;
   }
 
-
   const ast = parseAddSub();
 
   if (position !== tokens.length) {
-    throw new Error("Unexpected trailing expression");
+    throw new Error(
+      "Unexpected trailing tokens"
+    );
   }
 
   return ast;
+}
+
+
+// ============================================================
+// BIGINT HELPERS
+// ============================================================
+
+function toBigIntExact(value) {
+  if (typeof value === "bigint") {
+    return value;
+  }
+
+  if (
+    typeof value === "number" &&
+    Number.isSafeInteger(value)
+  ) {
+    return BigInt(value);
+  }
+
+  return null;
+}
+
+
+function bigIntPower(base, exponent) {
+  if (exponent < 0n) {
+    return null;
+  }
+
+  if (
+    exponent >
+    BigInt(MAX_BIGINT_EXPONENT)
+  ) {
+    throw new Error("Exponent too large");
+  }
+
+  let result = 1n;
+  let current = base;
+  let power = exponent;
+
+  // Fast exponentiation.
+  while (power > 0n) {
+    if (power % 2n === 1n) {
+      result *= current;
+    }
+
+    power /= 2n;
+
+    if (power > 0n) {
+      current *= current;
+    }
+  }
+
+  return result;
+}
+
+
+// ============================================================
+// CALCULATE BINARY OPERATION
+// ============================================================
+
+function calculateBinary(
+  op,
+  left,
+  right
+) {
+  const leftBig = toBigIntExact(left);
+  const rightBig = toBigIntExact(right);
+
+  // ----------------------------------------------------------
+  // Exact integer + - *
+  // ----------------------------------------------------------
+
+  if (
+    leftBig !== null &&
+    rightBig !== null
+  ) {
+    if (op === "+") {
+      return leftBig + rightBig;
+    }
+
+    if (op === "-") {
+      return leftBig - rightBig;
+    }
+
+    if (op === "*") {
+      return leftBig * rightBig;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Exact integer division when divisible.
+  // ----------------------------------------------------------
+
+  if (
+    op === "/" &&
+    leftBig !== null &&
+    rightBig !== null
+  ) {
+    if (rightBig === 0n) {
+      throw new Error(
+        "Division by zero"
+      );
+    }
+
+    if (leftBig % rightBig === 0n) {
+      return leftBig / rightBig;
+    }
+
+    return Number(left) / Number(right);
+  }
+
+  // ----------------------------------------------------------
+  // Exact huge integer powers.
+  // ----------------------------------------------------------
+
+  if (
+    op === "^" &&
+    leftBig !== null &&
+    rightBig !== null
+  ) {
+    if (rightBig < 0n) {
+      const positivePower =
+        bigIntPower(
+          leftBig,
+          -rightBig
+        );
+
+      if (positivePower === null) {
+        return null;
+      }
+
+      return 1 / Number(positivePower);
+    }
+
+    return bigIntPower(
+      leftBig,
+      rightBig
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Normal Number arithmetic.
+  // ----------------------------------------------------------
+
+  const a =
+    typeof left === "bigint"
+      ? Number(left)
+      : left;
+
+  const b =
+    typeof right === "bigint"
+      ? Number(right)
+      : right;
+
+  let result;
+
+  switch (op) {
+    case "+":
+      result = a + b;
+      break;
+
+    case "-":
+      result = a - b;
+      break;
+
+    case "*":
+      result = a * b;
+      break;
+
+    case "/":
+      if (b === 0) {
+        throw new Error(
+          "Division by zero"
+        );
+      }
+
+      result = a / b;
+      break;
+
+    case "^":
+      result = Math.pow(a, b);
+      break;
+
+    default:
+      throw new Error(
+        "Unknown operator"
+      );
+  }
+
+  if (!Number.isFinite(result)) {
+    throw new Error("Invalid result");
+  }
+
+  return result;
+}
+
+
+// ============================================================
+// EVALUATE WITH STEPS
+// ============================================================
+
+function evaluateWithSteps(
+  node,
+  steps
+) {
+  // Number
+  if (node.type === "number") {
+    if (
+      Number.isSafeInteger(
+        node.value
+      )
+    ) {
+      return BigInt(node.value);
+    }
+
+    return node.value;
+  }
+
+  // Parentheses
+  if (node.type === "group") {
+    return evaluateWithSteps(
+      node.child,
+      steps
+    );
+  }
+
+  // Unary + / -
+  if (node.type === "unary") {
+    const value =
+      evaluateWithSteps(
+        node.operand,
+        steps
+      );
+
+    if (node.op === "-") {
+      return -value;
+    }
+
+    return value;
+  }
+
+  // Binary operation
+  if (node.type === "binary") {
+    const left =
+      evaluateWithSteps(
+        node.left,
+        steps
+      );
+
+    const right =
+      evaluateWithSteps(
+        node.right,
+        steps
+      );
+
+    const result =
+      calculateBinary(
+        node.op,
+        left,
+        right
+      );
+
+    steps.push({
+      op: node.op,
+      left,
+      right,
+      result,
+
+      text:
+        formatValue(left) +
+        " " +
+        opSymbol(node.op) +
+        " " +
+        formatValue(right) +
+        " = " +
+        formatValue(result)
+    });
+
+    return result;
+  }
+
+  throw new Error(
+    "Unknown expression node"
+  );
 }
 
 
@@ -462,11 +880,17 @@ function parseExpression(tokens) {
 // ============================================================
 
 function precedenceOf(op) {
-  if (op === "+" || op === "-") {
+  if (
+    op === "+" ||
+    op === "-"
+  ) {
     return 1;
   }
 
-  if (op === "*" || op === "/") {
+  if (
+    op === "*" ||
+    op === "/"
+  ) {
     return 2;
   }
 
@@ -491,45 +915,51 @@ function nodeToText(
     return "";
   }
 
-  // Number
   if (node.type === "number") {
-    return formatNumber(node.value);
-  }
-
-  // Group
-  if (node.type === "group") {
-    return "(" + nodeToText(node.child) + ")";
-  }
-
-  // Unary
-  if (node.type === "unary") {
-    const operand = nodeToText(
-      node.operand,
-      4,
-      false
+    return (
+      node.raw ??
+      formatValue(node.value)
     );
+  }
+
+  if (node.type === "group") {
+    return (
+      "(" +
+      nodeToText(node.child) +
+      ")"
+    );
+  }
+
+  if (node.type === "unary") {
+    const operand =
+      nodeToText(
+        node.operand,
+        4,
+        false
+      );
 
     return node.op === "-"
       ? "−" + operand
       : "+" + operand;
   }
 
-  // Binary
   if (node.type === "binary") {
-    const currentPrecedence =
+    const precedence =
       precedenceOf(node.op);
 
-    let left = nodeToText(
-      node.left,
-      currentPrecedence,
-      false
-    );
+    let left =
+      nodeToText(
+        node.left,
+        precedence,
+        false
+      );
 
-    let right = nodeToText(
-      node.right,
-      currentPrecedence,
-      true
-    );
+    let right =
+      nodeToText(
+        node.right,
+        precedence,
+        true
+      );
 
     let text =
       left +
@@ -539,20 +969,26 @@ function nodeToText(
       right;
 
     let needsParentheses =
-      currentPrecedence < parentPrecedence;
+      precedence <
+      parentPrecedence;
 
-    // Preserve meaning for subtraction/division.
     if (
-      currentPrecedence === parentPrecedence &&
+      precedence ===
+        parentPrecedence &&
       isRightChild &&
-      (node.op === "-" ||
-        node.op === "/")
+      (
+        node.op === "-" ||
+        node.op === "/"
+      )
     ) {
       needsParentheses = true;
     }
 
     if (needsParentheses) {
-      text = "(" + text + ")";
+      text =
+        "(" +
+        text +
+        ")";
     }
 
     return text;
@@ -563,142 +999,43 @@ function nodeToText(
 
 
 // ============================================================
-// EVALUATION
+// COLLECT OPERATORS
 // ============================================================
 
-function calculateBinary(op, left, right) {
-  let result;
-
-  switch (op) {
-    case "+":
-      result = left + right;
-      break;
-
-    case "-":
-      result = left - right;
-      break;
-
-    case "*":
-      result = left * right;
-      break;
-
-    case "/":
-      if (right === 0) {
-        throw new Error("Division by zero");
-      }
-
-      result = left / right;
-      break;
-
-    case "^":
-      result = Math.pow(left, right);
-      break;
-
-    default:
-      throw new Error("Unknown operator");
-  }
-
-  if (!Number.isFinite(result)) {
-    throw new Error("Invalid result");
-  }
-
-  return result;
-}
-
-
-// ============================================================
-// EVALUATE + CREATE USEFUL STEPS
-// ============================================================
-
-function evaluateWithSteps(node, steps) {
-  // Number
-  if (node.type === "number") {
-    return node.value;
-  }
-
-  // Group
-  if (node.type === "group") {
-    return evaluateWithSteps(
-      node.child,
-      steps
-    );
-  }
-
-  // Unary
-  if (node.type === "unary") {
-    const value = evaluateWithSteps(
-      node.operand,
-      steps
-    );
-
-    return node.op === "-"
-      ? -value
-      : value;
-  }
-
-  // Binary
-  if (node.type === "binary") {
-    const left = evaluateWithSteps(
-      node.left,
-      steps
-    );
-
-    const right = evaluateWithSteps(
-      node.right,
-      steps
-    );
-
-    const result = calculateBinary(
-      node.op,
-      left,
-      right
-    );
-
-    steps.push({
-      op: node.op,
-      left,
-      right,
-      result,
-      text:
-        formatNumber(left) +
-        " " +
-        opSymbol(node.op) +
-        " " +
-        formatNumber(right) +
-        " = " +
-        formatNumber(result)
-    });
-
-    return result;
-  }
-
-  throw new Error("Unknown node");
-}
-
-
-// ============================================================
-// FIND OPERATORS IN AST
-// ============================================================
-
-function collectOperators(node, list = []) {
+function collectOperators(
+  node,
+  list = []
+) {
   if (!node) {
     return list;
   }
 
   if (node.type === "group") {
-    collectOperators(node.child, list);
-    return list;
+    return collectOperators(
+      node.child,
+      list
+    );
   }
 
   if (node.type === "unary") {
-    collectOperators(node.operand, list);
-    return list;
+    return collectOperators(
+      node.operand,
+      list
+    );
   }
 
   if (node.type === "binary") {
-    collectOperators(node.left, list);
+    collectOperators(
+      node.left,
+      list
+    );
+
     list.push(node.op);
-    collectOperators(node.right, list);
+
+    collectOperators(
+      node.right,
+      list
+    );
   }
 
   return list;
@@ -706,7 +1043,7 @@ function collectOperators(node, list = []) {
 
 
 // ============================================================
-// CHOOSE A SHORT, NATURAL EXPLANATION
+// EXPLANATION HINT
 // ============================================================
 
 function getExplanationHint(
@@ -714,45 +1051,82 @@ function getExplanationHint(
   ast,
   steps
 ) {
-  if (!steps || steps.length <= 1) {
-    return "";
-  }
+  const operators =
+    collectOperators(ast);
 
-  const operators = collectOperators(ast);
+  // ----------------------------------------------------------
+  // Powers
+  // ----------------------------------------------------------
 
-  // Parentheses are visibly important.
-  if (expression.includes("(")) {
-    return "The parentheses are solved first.";
-  }
-
-  // Powers should be handled before normal arithmetic.
   if (operators.includes("^")) {
-    return "The power is evaluated first.";
+    const powerStep =
+      steps.find(
+        step => step.op === "^"
+      );
+
+    if (powerStep) {
+      const base =
+        formatValue(powerStep.left);
+
+      const exponent =
+        formatValue(powerStep.right);
+
+      return (
+        `**${base}^${exponent} means multiplying ${base} by itself ${exponent} times.**`
+      );
+    }
+
+    return (
+      "A power means multiplying the base by itself the given number of times."
+    );
   }
 
-  // Multiplication/division before addition/subtraction.
-  const hasMultiplyOrDivide =
+  // ----------------------------------------------------------
+  // Parentheses
+  // ----------------------------------------------------------
+
+  if (expression.includes("(")) {
+    return (
+      "The parentheses are solved first."
+    );
+  }
+
+  // ----------------------------------------------------------
+  // Mixed operations
+  // ----------------------------------------------------------
+
+  const hasMultiplyDivide =
     operators.includes("*") ||
     operators.includes("/");
 
-  const hasAddOrSubtract =
+  const hasAddSubtract =
     operators.includes("+") ||
     operators.includes("-");
 
   if (
-    hasMultiplyOrDivide &&
-    hasAddOrSubtract
+    hasMultiplyDivide &&
+    hasAddSubtract
   ) {
-    return "Multiplication and division come before addition and subtraction.";
+    return (
+      "Multiplication and division come before addition and subtraction."
+    );
   }
 
-  // Only addition/subtraction.
+  // ----------------------------------------------------------
+  // Addition / subtraction only
+  // ----------------------------------------------------------
+
   if (
+    operators.length > 0 &&
     operators.every(
-      op => op === "+" || op === "-"
+      op =>
+        op === "+" ||
+        op === "-"
     )
   ) {
-    return "Work from left to right.";
+    return (
+      "Work from left to right."
+    );
   }
 
   return "";
@@ -763,7 +1137,9 @@ function getExplanationHint(
 // MAIN SOLVER
 // ============================================================
 
-export function trySolveMath(rawInput) {
+export function trySolveMath(
+  rawInput
+) {
   if (
     rawInput === null ||
     rawInput === undefined
@@ -771,28 +1147,23 @@ export function trySolveMath(rawInput) {
     return null;
   }
 
-  let text = String(rawInput).trim();
+  let text =
+    String(rawInput).trim();
 
   if (
     !text ||
-    text.length > MAX_INPUT_LENGTH
+    text.length >
+      MAX_INPUT_LENGTH
   ) {
     return null;
   }
 
   // ----------------------------------------------------------
-  // Common natural-language prefixes
+  // Natural-language extraction
   // ----------------------------------------------------------
 
-  text = text.replace(
-    /^(what\s+is|what's|calculate|compute|solve|evaluate|find|answer)\s*:?\s*/i,
-    ""
-  );
-
-  // Remove trailing question marks.
-  text = text
-    .replace(/\?+\s*$/, "")
-    .trim();
+  text =
+    extractMathExpression(text);
 
   if (!text) {
     return null;
@@ -810,20 +1181,22 @@ export function trySolveMath(rawInput) {
   }
 
   // ----------------------------------------------------------
-  // Must contain a number and an operator.
+  // Basic math validation
   // ----------------------------------------------------------
 
   if (!/\d/.test(normalized)) {
     return null;
   }
 
-  if (!/[+\-*/^]/.test(normalized)) {
+  if (
+    !/[+\-*/^]/.test(
+      normalized
+    )
+  ) {
     return null;
   }
 
   // Only arithmetic characters.
-  //
-  // e/E are allowed for scientific notation.
   if (
     !/^[\d+\-*/^().eE\s]+$/.test(
       normalized
@@ -866,10 +1239,6 @@ export function trySolveMath(rawInput) {
         steps
       );
 
-    if (!Number.isFinite(result)) {
-      return null;
-    }
-
     // --------------------------------------------------------
     // Display expression
     // --------------------------------------------------------
@@ -878,7 +1247,7 @@ export function trySolveMath(rawInput) {
       nodeToText(ast);
 
     // --------------------------------------------------------
-    // Explanation hint
+    // Explanation
     // --------------------------------------------------------
 
     const hint =
@@ -896,29 +1265,41 @@ export function trySolveMath(rawInput) {
       result,
 
       formattedResult:
-        formatNumber(result),
+        formatValue(result),
 
       steps,
 
       hint,
 
+      exact:
+        typeof result === "bigint",
+
       operatorCount:
-        tokens.filter(token =>
-          ["+", "-", "*", "/", "^"]
-            .includes(token.type)
+        tokens.filter(
+          token =>
+            [
+              "+",
+              "-",
+              "*",
+              "/",
+              "^"
+            ].includes(
+              token.type
+            )
         ).length
     };
 
   } catch (error) {
-    // Invalid/malformed arithmetic:
-    // allow the normal AI to handle it.
+    // Invalid arithmetic:
+    // allow the normal AI/web system
+    // to handle the request.
     return null;
   }
 }
 
 
 // ============================================================
-// PROFESSIONAL EXPLANATION
+// EXPLANATION GENERATOR
 // ============================================================
 
 export function explainMathSolution(
@@ -935,10 +1316,12 @@ export function explainMathSolution(
 
   const finalResult =
     solved.formattedResult ??
-    formatNumber(solved.result);
+    formatValue(
+      solved.result
+    );
 
   // ----------------------------------------------------------
-  // Main answer
+  // Main result
   // ----------------------------------------------------------
 
   lines.push(
@@ -955,6 +1338,14 @@ export function explainMathSolution(
   if (steps.length === 1) {
     lines.push("");
 
+    if (solved.hint) {
+      lines.push(
+        solved.hint
+      );
+
+      lines.push("");
+    }
+
     lines.push(
       `**${steps[0].text}**`
     );
@@ -968,20 +1359,20 @@ export function explainMathSolution(
 
   if (solved.hint) {
     lines.push("");
-    lines.push(solved.hint);
+    lines.push(
+      solved.hint
+    );
   }
 
   lines.push("");
 
-  steps.forEach((step, index) => {
-    lines.push(
-      `${index + 1}. **${step.text}**`
-    );
-  });
-
-  // ----------------------------------------------------------
-  // Final answer
-  // ----------------------------------------------------------
+  steps.forEach(
+    (step, index) => {
+      lines.push(
+        `${index + 1}. **${step.text}**`
+      );
+    }
+  );
 
   lines.push("");
 
