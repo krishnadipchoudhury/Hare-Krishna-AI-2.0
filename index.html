@@ -20,7 +20,6 @@
 
     <div class="auth-card">
 
-      <!-- AI LOGO -->
       <div class="auth-logo" aria-hidden="true">
         <span>✦</span>
       </div>
@@ -30,7 +29,6 @@
       <p class="auth-subtitle">
         Sign in to save your chats and personal AI memory.
       </p>
-
 
       <!-- GOOGLE LOGIN -->
 
@@ -259,34 +257,99 @@
         </div>
 
 
+        <!-- EXPORT ALL CHATS -->
+
         <button
           class="side-btn"
           id="exportAllBtn"
           type="button">
 
-          ⇩
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true">
+
+            <path d="M12 3v12"></path>
+            <path d="m7 10 5 5 5-5"></path>
+            <path d="M5 21h14"></path>
+
+          </svg>
+
           <span>Export all chats</span>
 
         </button>
 
+
+        <!-- DELETE ALL CHATS -->
 
         <button
           class="side-btn"
           id="deleteAllBtn"
           type="button">
 
-          ⌫
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true">
+
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <path d="M19 6l-1 15H6L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+
+          </svg>
+
           <span>Delete all chats</span>
 
         </button>
 
+
+        <!-- SIGN OUT -->
 
         <button
           class="side-btn logout-btn"
           id="logoutBtn"
           type="button">
 
-          ⇥
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true">
+
+            <!-- Door -->
+
+            <path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9"></path>
+
+            <!-- Door edge -->
+
+            <path d="M14 3v18"></path>
+
+            <!-- Exit arrow -->
+
+            <path d="M18 8l4 4-4 4"></path>
+            <path d="M10 12h12"></path>
+
+          </svg>
+
           <span>Sign out</span>
 
         </button>
@@ -296,7 +359,9 @@
     </aside>
 
 
-    <!-- MAIN -->
+    <!-- =====================================================
+         MAIN CONTENT
+         ===================================================== -->
 
     <main class="main">
 
@@ -376,7 +441,6 @@
       <section
         class="chat-area"
         id="chatArea">
-
 
         <!-- WELCOME -->
 
@@ -589,94 +653,227 @@
 
       </button>
 
-      <h2>Settings</h2>
+      <h2>
+        Settings
+      </h2>
+
 
       <div class="settings-scroll">
 
         <!-- ACCOUNT -->
+
         <div class="settings-section">
 
-          <div class="settings-section-title">Account</div>
+          <div class="settings-section-title">
+            Account
+          </div>
+
 
           <div class="settings-row">
 
-            <div id="settingsAvatar" class="settings-row-avatar">?</div>
+            <div
+              id="settingsAvatar"
+              class="settings-row-avatar">
+              ?
+            </div>
+
 
             <div class="settings-row-text">
-              <div id="settingsName" class="settings-row-title">Guest</div>
-              <div id="settingsEmail" class="settings-row-sub">Not signed in</div>
+
+              <div
+                id="settingsName"
+                class="settings-row-title">
+                Guest
+              </div>
+
+              <div
+                id="settingsEmail"
+                class="settings-row-sub">
+                Not signed in
+              </div>
+
             </div>
 
           </div>
 
-          <button class="settings-item" id="manageAccountBtn" type="button">
-            <span>Manage Google Account</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="manageAccountBtn"
+            type="button">
+
+            <span>
+              Manage Google Account
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
         </div>
+
 
         <!-- MEMORY -->
+
         <div class="settings-section">
 
-          <div class="settings-section-title">Memory</div>
-
-          <div class="settings-toggle-row">
-            <span>Reference saved memory</span>
-            <label class="switch">
-              <input type="checkbox" id="memoryToggle" checked>
-              <span class="switch-slider"></span>
-            </label>
+          <div class="settings-section-title">
+            Memory
           </div>
 
-          <button class="settings-item" id="manageMemoryBtn" type="button">
-            <span>Manage memory</span>
-            <span class="settings-item-arrow">›</span>
+
+          <div class="settings-toggle-row">
+
+            <span>
+              Reference saved memory
+            </span>
+
+
+            <label class="switch">
+
+              <input
+                type="checkbox"
+                id="memoryToggle"
+                checked>
+
+              <span class="switch-slider"></span>
+
+            </label>
+
+          </div>
+
+
+          <button
+            class="settings-item"
+            id="manageMemoryBtn"
+            type="button">
+
+            <span>
+              Manage memory
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
         </div>
+
 
         <!-- CHATS -->
+
         <div class="settings-section">
 
-          <div class="settings-section-title">Chats</div>
+          <div class="settings-section-title">
+            Chats
+          </div>
 
-          <button class="settings-item" id="openBinBtn" type="button">
-            <span>Recently deleted</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="openBinBtn"
+            type="button">
+
+            <span>
+              Recently deleted
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
         </div>
+
 
         <!-- SUPPORT & LEGAL -->
+
         <div class="settings-section">
 
-          <div class="settings-section-title">Support &amp; Legal</div>
+          <div class="settings-section-title">
+            Support &amp; Legal
+          </div>
 
-          <button class="settings-item" id="customerServiceBtn" type="button">
-            <span>Contact customer service</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="customerServiceBtn"
+            type="button">
+
+            <span>
+              Contact customer service
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
-          <button class="settings-item" id="termsBtn" type="button">
-            <span>Terms &amp; Conditions</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="termsBtn"
+            type="button">
+
+            <span>
+              Terms &amp; Conditions
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
-          <button class="settings-item" id="privacyBtn" type="button">
-            <span>Privacy Policy</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="privacyBtn"
+            type="button">
+
+            <span>
+              Privacy Policy
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
-          <button class="settings-item" id="licenseBtn" type="button">
-            <span>License</span>
-            <span class="settings-item-arrow">›</span>
+
+          <button
+            class="settings-item"
+            id="licenseBtn"
+            type="button">
+
+            <span>
+              License
+            </span>
+
+            <span class="settings-item-arrow">
+              ›
+            </span>
+
           </button>
 
         </div>
 
-        <button class="settings-item danger-item" id="settingsSignOutBtn" type="button">
+
+        <!-- SIGN OUT -->
+
+        <button
+          class="settings-item danger-item"
+          id="settingsSignOutBtn"
+          type="button">
+
           Sign out
+
         </button>
 
       </div>
@@ -706,11 +903,22 @@
 
       </button>
 
-      <h2>Memory</h2>
 
-      <p>Things saved for the AI to remember about you.</p>
+      <h2>
+        Memory
+      </h2>
 
-      <div id="memoryList" class="memory-list"></div>
+
+      <p>
+        Things saved for the AI to remember about you.
+      </p>
+
+
+      <div
+        id="memoryList"
+        class="memory-list">
+      </div>
+
 
       <div class="memory-add-row">
 
@@ -720,12 +928,26 @@
           maxlength="200"
           placeholder="Add something to remember...">
 
-        <button class="primary-btn" id="addMemoryBtn" type="button">Add</button>
+
+        <button
+          class="primary-btn"
+          id="addMemoryBtn"
+          type="button">
+
+          Add
+
+        </button>
 
       </div>
 
-      <button class="settings-item danger-item" id="clearMemoryBtn" type="button">
+
+      <button
+        class="settings-item danger-item"
+        id="clearMemoryBtn"
+        type="button">
+
         Delete all memory
+
       </button>
 
     </div>
@@ -734,7 +956,7 @@
 
 
   <!-- =====================================================
-       BIN MODAL (recently deleted chats)
+       BIN MODAL
        ===================================================== -->
 
   <div
@@ -753,11 +975,21 @@
 
       </button>
 
-      <h2>Recently deleted</h2>
 
-      <p>Chats stay here for 14 days, then are permanently deleted.</p>
+      <h2>
+        Recently deleted
+      </h2>
 
-      <div id="binList" class="bin-list"></div>
+
+      <p>
+        Chats stay here for 14 days, then are permanently deleted.
+      </p>
+
+
+      <div
+        id="binList"
+        class="bin-list">
+      </div>
 
     </div>
 
@@ -765,7 +997,7 @@
 
 
   <!-- =====================================================
-       LEGAL MODAL (Terms / Privacy / License)
+       LEGAL MODAL
        ===================================================== -->
 
   <div
@@ -784,9 +1016,16 @@
 
       </button>
 
-      <h2 id="legalTitle">Terms &amp; Conditions</h2>
 
-      <div id="legalContent" class="legal-content"></div>
+      <h2 id="legalTitle">
+        Terms &amp; Conditions
+      </h2>
+
+
+      <div
+        id="legalContent"
+        class="legal-content">
+      </div>
 
     </div>
 
@@ -806,12 +1045,7 @@
 
 
   <!-- =====================================================
-       MARKDOWN RENDERING FOR AI REPLIES
-       marked.js converts the AI's Markdown (bold, tables,
-       headers, line breaks, etc.) into HTML. DOMPurify then
-       sanitizes that HTML before it's ever inserted into the
-       page, since the text is AI-generated and shouldn't be
-       trusted blindly.
+       MARKDOWN RENDERING
        ===================================================== -->
 
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
