@@ -1,37 +1,11 @@
 // knowledge/math.js
-//
 // Hare Krishna AI 2.0 — Mathematics Engine
-//
-// Supports:
-//   • Arithmetic
-//   • Large powers
-//   • Squares
-//   • Square roots
-//   • π / pi
-//   • Linear equations
-//   • Simple quadratic equations
-//   • Natural-language math requests
-//   • Formulas + substitutions + explanations
-//
-// No external dependencies.
-//
-// Existing API:
-//   trySolveMath(input)
-//   explainMathSolution(result)
-
-
-// ============================================================
-// CONFIG
-// ============================================================
+// Supports arithmetic, powers, squares, square roots, pi/circles,
+// fractions, mixed fractions, linear equations and quadratics.
 
 const MAX_INPUT_LENGTH = 1000;
 const MAX_TOKENS = 300;
 const MAX_BIGINT_EXPONENT = 100000;
-
-
-// ============================================================
-// SUPERSCRIPTS
-// ============================================================
 
 const SUPERSCRIPT_MAP = {
   "⁰": "0",
@@ -53,23 +27,16 @@ const SUPERSCRIPT_MAP = {
 function superscriptToNormal(text) {
   return String(text).replace(
     /[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁽⁾]+/g,
-    match =>
+    (match) =>
       match
         .split("")
-        .map(ch => SUPERSCRIPT_MAP[ch] ?? ch)
+        .map((char) => SUPERSCRIPT_MAP[char] ?? char)
         .join("")
   );
 }
 
-
-// ============================================================
-// GENERAL FORMATTING
-// ============================================================
-
 function formatBigInt(value) {
-  return value
-    .toString()
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 function formatNumber(value) {
@@ -86,15 +53,9 @@ function formatNumber(value) {
   }
 
   const rounded =
-    Math.round(
-      (value + Number.EPSILON) * 1e12
-    ) / 1e12;
+    Math.round((value + Number.EPSILON) * 1e12) / 1e12;
 
-  if (Object.is(rounded, -0)) {
-    return "0";
-  }
-
-  return String(rounded);
+  return Object.is(rounded, -0) ? "0" : String(rounded);
 }
 
 function formatValue(value) {
@@ -102,20 +63,12 @@ function formatValue(value) {
 }
 
 function cleanNumber(value) {
-  if (
-    typeof value === "number" &&
-    Number.isInteger(value)
-  ) {
+  if (typeof value === "number" && Number.isInteger(value)) {
     return String(value);
   }
 
   return formatNumber(value);
 }
-
-
-// ============================================================
-// OPERATOR SYMBOLS
-// ============================================================
 
 function opSymbol(op) {
   return {
@@ -127,41 +80,30 @@ function opSymbol(op) {
   }[op] || op;
 }
 
-
-// ============================================================
-// NATURAL LANGUAGE CLEANING
-// ============================================================
-
 function extractMathExpression(raw) {
   let text = String(raw ?? "").trim();
 
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
 
-  text = superscriptToNormal(text);
-
-  // Unicode mathematical symbols.
-  text = text
+  text = superscriptToNormal(text)
     .replace(/×/g, "*")
     .replace(/÷/g, "/")
     .replace(/[−–—]/g, "-")
     .replace(/π/gi, "pi")
     .replace(/√/g, "sqrt ");
 
-  // Powers written in words.
   text = text
     .replace(
       /\b(raised to the power of|raised to the power|to the power of|to the power)\b/gi,
       "^"
     )
     .replace(/\bsquared\b/gi, "^2")
-    .replace(/\bcubed\b/gi, "^3");
-
-  // Multiplication/division words.
-  text = text
+    .replace(/\bcubed\b/gi, "^3")
     .replace(/\bmultiplied by\b/gi, "*")
     .replace(/\bdivided by\b/gi, "/");
 
-  // Common request phrases.
   text = text
     .replace(/^\s*please\s+/i, "")
     .replace(/^\s*can\s+you\s+/i, "")
@@ -173,10 +115,7 @@ function extractMathExpression(raw) {
       /^\s*(solve|calculate|compute|evaluate|work out|answer)\s*:?\s*/i,
       ""
     )
-    .replace(
-      /^\s*(what is|what's|whats)\s*:?\s*/i,
-      ""
-    )
+    .replace(/^\s*(what is|what's|whats)\s*:?\s*/i, "")
     .replace(
       /^\s*find\s+(the\s+)?(value|answer)\s+(of|for)\s+/i,
       ""
@@ -184,19 +123,12 @@ function extractMathExpression(raw) {
     .replace(
       /^\s*tell\s+me\s+(the\s+)?(answer|value)\s+(of|for)\s+/i,
       ""
-    );
-
-  text = text
+    )
     .replace(/[?!.]+\s*$/g, "")
     .trim();
 
   return text || null;
 }
-
-
-// ============================================================
-// BIGINT HELPERS
-// ============================================================
 
 function toBigIntExact(value) {
   if (typeof value === "bigint") {
@@ -218,10 +150,7 @@ function bigIntPower(base, exponent) {
     return null;
   }
 
-  if (
-    exponent >
-    BigInt(MAX_BIGINT_EXPONENT)
-  ) {
+  if (exponent > BigInt(MAX_BIGINT_EXPONENT)) {
     throw new Error("Exponent too large");
   }
 
@@ -244,11 +173,6 @@ function bigIntPower(base, exponent) {
   return result;
 }
 
-
-// ============================================================
-// TOKENIZER
-// ============================================================
-
 function tokenize(expr) {
   const tokens = [];
   let i = 0;
@@ -261,22 +185,21 @@ function tokenize(expr) {
       continue;
     }
 
-    // Number
     if (/[0-9.]/.test(ch)) {
       const start = i;
       let hasDigit = false;
       let hasDot = false;
 
       while (i < expr.length) {
-        const c = expr[i];
+        const current = expr[i];
 
-        if (/[0-9]/.test(c)) {
+        if (/[0-9]/.test(current)) {
           hasDigit = true;
           i++;
           continue;
         }
 
-        if (c === ".") {
+        if (current === ".") {
           if (hasDot) {
             throw new Error("Invalid decimal");
           }
@@ -309,7 +232,6 @@ function tokenize(expr) {
       continue;
     }
 
-    // Constant pi
     if (
       expr.slice(i, i + 2).toLowerCase() === "pi"
     ) {
@@ -323,7 +245,6 @@ function tokenize(expr) {
       continue;
     }
 
-    // Operators
     if ("+-*/^()".includes(ch)) {
       tokens.push({
         type: ch
@@ -333,9 +254,7 @@ function tokenize(expr) {
       continue;
     }
 
-    throw new Error(
-      "Unknown character: " + ch
-    );
+    throw new Error("Unknown character: " + ch);
   }
 
   if (tokens.length > MAX_TOKENS) {
@@ -345,21 +264,12 @@ function tokenize(expr) {
   return tokens;
 }
 
-
-// ============================================================
-// PARSER
-// ============================================================
-
 function parseExpression(tokens) {
   let position = 0;
 
-  function peek() {
-    return tokens[position];
-  }
+  const peek = () => tokens[position];
 
-  function consume() {
-    return tokens[position++];
-  }
+  const consume = () => tokens[position++];
 
   function parsePrimary() {
     const token = peek();
@@ -383,13 +293,8 @@ function parseExpression(tokens) {
 
       const child = parseAddSub();
 
-      if (
-        !peek() ||
-        peek().type !== ")"
-      ) {
-        throw new Error(
-          "Missing closing parenthesis"
-        );
+      if (!peek() || peek().type !== ")") {
+        throw new Error("Missing closing parenthesis");
       }
 
       consume();
@@ -406,19 +311,14 @@ function parseExpression(tokens) {
   function parsePower() {
     const left = parsePrimary();
 
-    if (
-      peek() &&
-      peek().type === "^"
-    ) {
+    if (peek() && peek().type === "^") {
       consume();
-
-      const right = parseUnary();
 
       return {
         type: "binary",
         op: "^",
         left,
-        right
+        right: parseUnary()
       };
     }
 
@@ -453,19 +353,16 @@ function parseExpression(tokens) {
 
     while (
       peek() &&
-      (
-        peek().type === "*" ||
-        peek().type === "/"
-      )
+      (peek().type === "*" ||
+        peek().type === "/")
     ) {
-      const op = consume();
-      const right = parseUnary();
+      const operator = consume();
 
       node = {
         type: "binary",
-        op: op.type,
+        op: operator.type,
         left: node,
-        right
+        right: parseUnary()
       };
     }
 
@@ -477,19 +374,16 @@ function parseExpression(tokens) {
 
     while (
       peek() &&
-      (
-        peek().type === "+" ||
-        peek().type === "-"
-      )
+      (peek().type === "+" ||
+        peek().type === "-")
     ) {
-      const op = consume();
-      const right = parseMulDiv();
+      const operator = consume();
 
       node = {
         type: "binary",
-        op: op.type,
+        op: operator.type,
         left: node,
-        right
+        right: parseMulDiv()
       };
     }
 
@@ -499,23 +393,25 @@ function parseExpression(tokens) {
   const ast = parseAddSub();
 
   if (position !== tokens.length) {
-    throw new Error(
-      "Unexpected trailing tokens"
-    );
+    throw new Error("Unexpected trailing tokens");
   }
 
   return ast;
 }
 
-
-// ============================================================
-// AST DISPLAY
-// ============================================================
-
 function precedenceOf(op) {
-  if (op === "+" || op === "-") return 1;
-  if (op === "*" || op === "/") return 2;
-  if (op === "^") return 3;
+  if (op === "+" || op === "-") {
+    return 1;
+  }
+
+  if (op === "*" || op === "/") {
+    return 2;
+  }
+
+  if (op === "^") {
+    return 3;
+  }
+
   return 0;
 }
 
@@ -529,58 +425,45 @@ function nodeToText(
   }
 
   if (node.type === "group") {
-    return (
-      "(" +
-      nodeToText(node.child) +
-      ")"
-    );
+    return "(" + nodeToText(node.child) + ")";
   }
 
   if (node.type === "unary") {
     return (
       node.op +
-      nodeToText(
-        node.operand,
-        4,
-        false
-      )
+      nodeToText(node.operand, 4, false)
     );
   }
 
   if (node.type === "binary") {
-    const precedence =
-      precedenceOf(node.op);
+    const precedence = precedenceOf(node.op);
 
-    let left =
-      nodeToText(
-        node.left,
-        precedence,
-        false
-      );
+    const leftText = nodeToText(
+      node.left,
+      precedence,
+      false
+    );
 
-    let right =
-      nodeToText(
-        node.right,
-        precedence,
-        true
-      );
+    const rightText = nodeToText(
+      node.right,
+      precedence,
+      true
+    );
 
     let text =
-      left +
+      leftText +
       " " +
       opSymbol(node.op) +
       " " +
-      right;
+      rightText;
 
     const needsParentheses =
       precedence < parentPrecedence ||
       (
         precedence === parentPrecedence &&
         rightChild &&
-        (
-          node.op === "-" ||
-          node.op === "/"
-        )
+        (node.op === "-" ||
+          node.op === "/")
       );
 
     if (needsParentheses) {
@@ -593,64 +476,50 @@ function nodeToText(
   return "";
 }
 
+function calculateBinary(op, left, right) {
+  const leftBigInt = toBigIntExact(left);
+  const rightBigInt = toBigIntExact(right);
 
-// ============================================================
-// EVALUATION
-// ============================================================
-
-function calculateBinary(
-  op,
-  left,
-  right
-) {
-  const leftBig = toBigIntExact(left);
-  const rightBig = toBigIntExact(right);
-
-  // Exact integers.
   if (
-    leftBig !== null &&
-    rightBig !== null
+    leftBigInt !== null &&
+    rightBigInt !== null
   ) {
     if (op === "+") {
-      return leftBig + rightBig;
+      return leftBigInt + rightBigInt;
     }
 
     if (op === "-") {
-      return leftBig - rightBig;
+      return leftBigInt - rightBigInt;
     }
 
     if (op === "*") {
-      return leftBig * rightBig;
+      return leftBigInt * rightBigInt;
     }
 
     if (op === "/") {
-      if (rightBig === 0n) {
-        throw new Error(
-          "Division by zero"
-        );
+      if (rightBigInt === 0n) {
+        throw new Error("Division by zero");
       }
 
-      if (leftBig % rightBig === 0n) {
-        return leftBig / rightBig;
+      if (leftBigInt % rightBigInt === 0n) {
+        return leftBigInt / rightBigInt;
       }
     }
 
-    if (op === "^") {
-      if (rightBig >= 0n) {
-        return bigIntPower(
-          leftBig,
-          rightBig
-        );
-      }
+    if (op === "^" && rightBigInt >= 0n) {
+      return bigIntPower(
+        leftBigInt,
+        rightBigInt
+      );
     }
   }
 
-  const a =
+  const x =
     typeof left === "bigint"
       ? Number(left)
       : left;
 
-  const b =
+  const y =
     typeof right === "bigint"
       ? Number(right)
       : right;
@@ -659,56 +528,43 @@ function calculateBinary(
 
   switch (op) {
     case "+":
-      result = a + b;
+      result = x + y;
       break;
 
     case "-":
-      result = a - b;
+      result = x - y;
       break;
 
     case "*":
-      result = a * b;
+      result = x * y;
       break;
 
     case "/":
-      if (b === 0) {
-        throw new Error(
-          "Division by zero"
-        );
+      if (y === 0) {
+        throw new Error("Division by zero");
       }
 
-      result = a / b;
+      result = x / y;
       break;
 
     case "^":
-      result = Math.pow(a, b);
+      result = Math.pow(x, y);
       break;
 
     default:
-      throw new Error(
-        "Unknown operator"
-      );
+      throw new Error("Unknown operator");
   }
 
   if (!Number.isFinite(result)) {
-    throw new Error(
-      "Invalid result"
-    );
+    throw new Error("Invalid result");
   }
 
   return result;
 }
 
-function evaluate(
-  node,
-  steps
-) {
+function evaluate(node, steps) {
   if (node.type === "number") {
-    if (
-      Number.isSafeInteger(
-        node.value
-      )
-    ) {
+    if (Number.isSafeInteger(node.value)) {
       return BigInt(node.value);
     }
 
@@ -716,18 +572,14 @@ function evaluate(
   }
 
   if (node.type === "group") {
-    return evaluate(
-      node.child,
-      steps
-    );
+    return evaluate(node.child, steps);
   }
 
   if (node.type === "unary") {
-    const value =
-      evaluate(
-        node.operand,
-        steps
-      );
+    const value = evaluate(
+      node.operand,
+      steps
+    );
 
     return node.op === "-"
       ? -value
@@ -735,24 +587,21 @@ function evaluate(
   }
 
   if (node.type === "binary") {
-    const left =
-      evaluate(
-        node.left,
-        steps
-      );
+    const left = evaluate(
+      node.left,
+      steps
+    );
 
-    const right =
-      evaluate(
-        node.right,
-        steps
-      );
+    const right = evaluate(
+      node.right,
+      steps
+    );
 
-    const result =
-      calculateBinary(
-        node.op,
-        left,
-        right
-      );
+    const result = calculateBinary(
+      node.op,
+      left,
+      right
+    );
 
     steps.push({
       type: "calculation",
@@ -760,7 +609,6 @@ function evaluate(
       left,
       right,
       result,
-
       text:
         formatValue(left) +
         " " +
@@ -774,22 +622,537 @@ function evaluate(
     return result;
   }
 
-  throw new Error(
-    "Unknown AST node"
+  throw new Error("Unknown AST node");
+}
+
+// ---------------- FRACTIONS ----------------
+
+function gcd(a, b) {
+  a = Math.abs(a);
+  b = Math.abs(b);
+
+  while (b !== 0) {
+    const temp = a;
+    a = b;
+    b = temp % b;
+  }
+
+  return a;
+}
+
+function lcm(a, b) {
+  if (a === 0 || b === 0) {
+    return 0;
+  }
+
+  return Math.abs(
+    (a / gcd(a, b)) * b
   );
 }
 
+function simplifyFraction(
+  numerator,
+  denominator
+) {
+  if (denominator === 0) {
+    throw new Error("Division by zero");
+  }
 
-// ============================================================
-// SPECIAL: SQUARE
-// ============================================================
+  if (denominator < 0) {
+    numerator = -numerator;
+    denominator = -denominator;
+  }
+
+  const divisor = gcd(
+    Math.abs(numerator),
+    Math.abs(denominator)
+  );
+
+  return {
+    numerator: numerator / divisor,
+    denominator: denominator / divisor
+  };
+}
+
+function fractionToText(fraction) {
+  if (fraction.denominator === 1) {
+    return String(fraction.numerator);
+  }
+
+  return (
+    fraction.numerator +
+    "/" +
+    fraction.denominator
+  );
+}
+
+function fractionToLatex(fraction) {
+  if (fraction.denominator === 1) {
+    return String(fraction.numerator);
+  }
+
+  return (
+    "\\frac{" +
+    fraction.numerator +
+    "}{" +
+    fraction.denominator +
+    "}"
+  );
+}
+
+function fractionToMixed(fraction) {
+  const numerator = fraction.numerator;
+  const denominator = fraction.denominator;
+
+  if (denominator === 1) {
+    return {
+      whole: numerator,
+      numerator: 0,
+      denominator: 1,
+      isMixed: false
+    };
+  }
+
+  const sign = numerator < 0 ? -1 : 1;
+  const absoluteNumerator =
+    Math.abs(numerator);
+
+  const whole = Math.floor(
+    absoluteNumerator / denominator
+  );
+
+  const remainder =
+    absoluteNumerator % denominator;
+
+  if (remainder === 0) {
+    return {
+      whole: sign * whole,
+      numerator: 0,
+      denominator,
+      isMixed: false
+    };
+  }
+
+  return {
+    whole: sign * whole,
+    numerator: remainder,
+    denominator,
+    isMixed: whole !== 0
+  };
+}
+
+function mixedFractionToImproper(
+  whole,
+  numerator,
+  denominator
+) {
+  if (denominator === 0) {
+    throw new Error("Division by zero");
+  }
+
+  const sign = whole < 0 ? -1 : 1;
+
+  return {
+    numerator:
+      sign *
+      (Math.abs(whole) * denominator +
+        numerator),
+    denominator
+  };
+}
+
+function parseFractionValue(text) {
+  text = text.trim();
+
+  let match = text.match(
+    /^([+-]?\d+)\s+(\d+)\s*\/\s*(\d+)$/
+  );
+
+  if (match) {
+    const fraction =
+      mixedFractionToImproper(
+        Number(match[1]),
+        Number(match[2]),
+        Number(match[3])
+      );
+
+    return simplifyFraction(
+      fraction.numerator,
+      fraction.denominator
+    );
+  }
+
+  match = text.match(
+    /^([+-]?\d+)\s*\/\s*(\d+)$/
+  );
+
+  if (match) {
+    return simplifyFraction(
+      Number(match[1]),
+      Number(match[2])
+    );
+  }
+
+  if (/^[+-]?\d+$/.test(text)) {
+    return {
+      numerator: Number(text),
+      denominator: 1
+    };
+  }
+
+  return null;
+}
+
+function getFractionFormula(op) {
+  if (op === "+") {
+    return "a/b + c/d = (ad + bc) / bd";
+  }
+
+  if (op === "-") {
+    return "a/b − c/d = (ad − bc) / bd";
+  }
+
+  if (op === "*") {
+    return "a/b × c/d = ac / bd";
+  }
+
+  if (op === "/") {
+    return "a/b ÷ c/d = a/b × d/c";
+  }
+
+  return "";
+}
+
+function solveFractionExpression(text) {
+  let input = String(text)
+    .trim()
+    .replace(/−/g, "-")
+    .replace(/×/g, "*")
+    .replace(/÷/g, "/");
+
+  input = input
+    .replace(/\bplus\b/gi, "+")
+    .replace(/\bminus\b/gi, "-")
+    .replace(
+      /\bmultiplied\s+by\b/gi,
+      "*"
+    )
+    .replace(/\btimes\b/gi, "*")
+    .replace(
+      /\bdivided\s+by\b/gi,
+      "/"
+    );
+
+  const match = input.match(
+    /^(.+?)\s*([+\-*/])\s*(.+)$/
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const left = parseFractionValue(
+    match[1].trim()
+  );
+
+  const right = parseFractionValue(
+    match[3].trim()
+  );
+
+  const operator = match[2];
+
+  if (!left || !right) {
+    return null;
+  }
+
+  const a = left.numerator;
+  const b = left.denominator;
+  const c = right.numerator;
+  const d = right.denominator;
+
+  let numerator;
+  let denominator;
+
+  const steps = [];
+
+  if (
+    operator === "+" ||
+    operator === "-"
+  ) {
+    const common = lcm(b, d);
+
+    const newLeft =
+      a * (common / b);
+
+    const newRight =
+      c * (common / d);
+
+    numerator =
+      operator === "+"
+        ? newLeft + newRight
+        : newLeft - newRight;
+
+    denominator = common;
+
+    steps.push({
+      text:
+        "LCM of " +
+        b +
+        " and " +
+        d +
+        " = " +
+        common
+    });
+
+    steps.push({
+      text:
+        fractionToText(left) +
+        " = " +
+        newLeft +
+        "/" +
+        common
+    });
+
+    steps.push({
+      text:
+        fractionToText(right) +
+        " = " +
+        newRight +
+        "/" +
+        common
+    });
+
+    steps.push({
+      text:
+        newLeft +
+        "/" +
+        common +
+        " " +
+        (operator === "+" ? "+" : "−") +
+        " " +
+        newRight +
+        "/" +
+        common +
+        " = " +
+        numerator +
+        "/" +
+        denominator
+    });
+  } else if (operator === "*") {
+    numerator = a * c;
+    denominator = b * d;
+
+    steps.push({
+      text:
+        a +
+        "/" +
+        b +
+        " × " +
+        c +
+        "/" +
+        d +
+        " = (" +
+        a +
+        " × " +
+        c +
+        ")/(" +
+        b +
+        " × " +
+        d +
+        ")"
+    });
+
+    steps.push({
+      text:
+        "= " +
+        numerator +
+        "/" +
+        denominator
+    });
+  } else {
+    if (c === 0) {
+      return {
+        matched: true,
+        kind: "fraction-error",
+        error:
+          "A fraction cannot be divided by zero."
+      };
+    }
+
+    numerator = a * d;
+    denominator = b * c;
+
+    steps.push({
+      text:
+        "Keep the first fraction and multiply by the reciprocal of the second."
+    });
+
+    steps.push({
+      text:
+        a +
+        "/" +
+        b +
+        " ÷ " +
+        c +
+        "/" +
+        d +
+        " = " +
+        a +
+        "/" +
+        b +
+        " × " +
+        d +
+        "/" +
+        c
+    });
+
+    steps.push({
+      text:
+        "= " +
+        numerator +
+        "/" +
+        denominator
+    });
+  }
+
+  const simplified =
+    simplifyFraction(
+      numerator,
+      denominator
+    );
+
+  if (
+    simplified.numerator !== numerator ||
+    simplified.denominator !== denominator
+  ) {
+    steps.push({
+      text:
+        numerator +
+        "/" +
+        denominator +
+        " simplifies to " +
+        fractionToText(simplified)
+    });
+  }
+
+  const mixed =
+    fractionToMixed(simplified);
+
+  let mixedText = null;
+
+  if (mixed.isMixed) {
+    mixedText =
+      mixed.whole +
+      " " +
+      mixed.numerator +
+      "/" +
+      mixed.denominator;
+
+    steps.push({
+      text:
+        fractionToText(simplified) +
+        " = " +
+        mixedText
+    });
+  }
+
+  return {
+    matched: true,
+    kind: "fraction",
+    expression:
+      fractionToText(left) +
+      " " +
+      operator +
+      " " +
+      fractionToText(right),
+    operator,
+    left,
+    right,
+    result: simplified,
+    formattedResult:
+      fractionToText(simplified),
+    latexResult:
+      fractionToLatex(simplified),
+    mixedResult: mixedText,
+    formula:
+      getFractionFormula(operator),
+    steps
+  };
+}
+
+function explainFractionSolution(
+  solved
+) {
+  if (solved.kind === "fraction-error") {
+    return "**" + solved.error + "**";
+  }
+
+  const answer = solved.mixedResult
+    ? solved.formattedResult +
+      " = " +
+      solved.mixedResult
+    : solved.formattedResult;
+
+  const lines = [
+    "**" +
+      solved.expression +
+      " = " +
+      answer +
+      "**",
+    "",
+    "**Formula:** " +
+      solved.formula,
+    ""
+  ];
+
+  if (
+    solved.operator === "+" ||
+    solved.operator === "-"
+  ) {
+    lines.push(
+      "**First, make the denominators the same.**"
+    );
+  } else if (solved.operator === "*") {
+    lines.push(
+      "**Multiply the numerators and denominators.**"
+    );
+  } else {
+    lines.push(
+      "**Keep the first fraction, change ÷ to ×, and flip the second fraction.**"
+    );
+  }
+
+  lines.push("");
+
+  solved.steps.forEach(
+    (step, index) => {
+      lines.push(
+        index + 1 + ". " + step.text
+      );
+    }
+  );
+
+  lines.push(
+    "",
+    "**Final answer: " +
+      (solved.mixedResult ||
+        solved.formattedResult) +
+      "**"
+  );
+
+  return lines.join("\n");
+}
+
+// ---------------- SPECIAL MATH ----------------
 
 function solveSquare(text) {
   const match = text.match(
     /(?:square\s+of|square)\s*(-?\d+(?:\.\d+)?)|(-?\d+(?:\.\d+)?)\s*(?:square|²)/i
   );
 
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
 
   const value = Number(
     match[1] ?? match[2]
@@ -804,41 +1167,44 @@ function solveSquare(text) {
   return {
     matched: true,
     kind: "square",
-    expression: `${cleanNumber(value)}²`,
+    expression:
+      cleanNumber(value) + "²",
     result,
-    formattedResult: formatValue(result),
-
+    formattedResult:
+      formatValue(result),
     formula: "a² = a × a",
-
     explanation:
-      `The square of a number means multiplying the number by itself.`,
-
+      "The square of a number means multiplying the number by itself.",
     steps: [
-      `${cleanNumber(value)}² = ${cleanNumber(value)} × ${cleanNumber(value)}`,
-      `${cleanNumber(value)} × ${cleanNumber(value)} = ${formatValue(result)}`
+      cleanNumber(value) +
+        "² = " +
+        cleanNumber(value) +
+        " × " +
+        cleanNumber(value),
+
+      cleanNumber(value) +
+        " × " +
+        cleanNumber(value) +
+        " = " +
+        formatValue(result)
     ]
   };
 }
 
-
-// ============================================================
-// SPECIAL: SQUARE ROOT
-// ============================================================
-
 function solveSquareRoot(text) {
-  let match =
-    text.match(
-      /(?:square\s+root\s+of|sqrt)\s*\(?\s*(-?\d+(?:\.\d+)?)\s*\)?/i
-    );
+  let match = text.match(
+    /(?:square\s+root\s+of|sqrt)\s*\(?\s*(-?\d+(?:\.\d+)?)\s*\)?/i
+  );
 
   if (!match) {
-    match =
-      text.match(
-        /√\s*\(?\s*(-?\d+(?:\.\d+)?)\s*\)?/
-      );
+    match = text.match(
+      /√\s*\(?\s*(-?\d+(?:\.\d+)?)\s*\)?/
+    );
   }
 
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
 
   const value = Number(match[1]);
 
@@ -846,7 +1212,7 @@ function solveSquareRoot(text) {
     return {
       matched: true,
       kind: "square-root-error",
-      expression: `√${value}`,
+      expression: "√" + value,
       error:
         "A negative number does not have a real square root.",
       steps: []
@@ -855,270 +1221,121 @@ function solveSquareRoot(text) {
 
   const result = Math.sqrt(value);
 
-  const isPerfectSquare =
+  const perfectSquare =
     Number.isInteger(result);
 
   const steps = [
-    `√${cleanNumber(value)} = ${formatValue(result)}`
+    "√" +
+      cleanNumber(value) +
+      " = " +
+      formatValue(result)
   ];
 
-  if (isPerfectSquare) {
+  if (perfectSquare) {
     steps.unshift(
-      `${formatValue(result)} × ${formatValue(result)} = ${cleanNumber(value)}`
+      formatValue(result) +
+        " × " +
+        formatValue(result) +
+        " = " +
+        cleanNumber(value)
     );
   }
 
   return {
     matched: true,
     kind: "square-root",
-    expression: `√${cleanNumber(value)}`,
+    expression:
+      "√" + cleanNumber(value),
     result,
-    formattedResult: formatValue(result),
-
+    formattedResult:
+      formatValue(result),
     formula:
-      "√a = number that, when multiplied by itself, gives a",
-
+      "√a = the number that, when multiplied by itself, gives a",
     explanation:
-      isPerfectSquare
-        ? `The square root is the number whose square equals ${cleanNumber(value)}.`
-        : `The square root of ${cleanNumber(value)} is approximately ${formatValue(result)}.`,
-
+      perfectSquare
+        ? "The square root is the number whose square equals " +
+          cleanNumber(value) +
+          "."
+        : "The square root of " +
+          cleanNumber(value) +
+          " is approximately " +
+          formatValue(result) +
+          ".",
     steps
   };
 }
 
-
-// ============================================================
-// SPECIAL: CIRCLE / PI
-// ============================================================
-
 function solveCircle(text) {
   const lower = text.toLowerCase();
 
-  // Area of circle.
-  const areaMatch = lower.match(
+  let match = lower.match(
     /(?:area\s+of\s+(?:a\s+)?circle|circle\s+area).*?(?:radius|r)\s*(?:is|=|:)?\s*(\d+(?:\.\d+)?)/i
   );
 
-  if (areaMatch) {
-    const r = Number(areaMatch[1]);
-    const area = Math.PI * r * r;
+  if (match) {
+    const radius = Number(match[1]);
+    const area =
+      Math.PI * radius * radius;
 
     return {
       matched: true,
       kind: "circle-area",
-      expression: `Area of circle, r = ${r}`,
+      expression:
+        "Area of circle, r = " +
+        radius,
       result: area,
-      formattedResult: formatValue(area),
-
+      formattedResult:
+        formatValue(area),
       formula: "A = πr²",
-
       explanation:
         "The area of a circle is found using **A = πr²**, where r is the radius.",
-
       steps: [
-        `A = π × ${r}²`,
-        `A = π × ${r * r}`,
-        `A ≈ ${formatValue(area)}`
+        "A = π × " +
+          radius +
+          "²",
+
+        "A = π × " +
+          radius * radius,
+
+        "A ≈ " +
+          formatValue(area)
       ]
     };
   }
 
-  // Circumference.
-  const circumferenceMatch = lower.match(
+  match = lower.match(
     /(?:circumference|perimeter)\s+(?:of\s+(?:a\s+)?)?circle.*?(?:radius|r)\s*(?:is|=|:)?\s*(\d+(?:\.\d+)?)/i
   );
 
-  if (circumferenceMatch) {
-    const r = Number(
-      circumferenceMatch[1]
-    );
-
+  if (match) {
+    const radius = Number(match[1]);
     const circumference =
-      2 * Math.PI * r;
+      2 * Math.PI * radius;
 
     return {
       matched: true,
       kind: "circle-circumference",
       expression:
-        `Circumference, r = ${r}`,
-
+        "Circumference, r = " +
+        radius,
       result: circumference,
-
       formattedResult:
         formatValue(circumference),
-
       formula: "C = 2πr",
-
       explanation:
         "The circumference of a circle is found using **C = 2πr**.",
-
       steps: [
-        `C = 2 × π × ${r}`,
-        `C ≈ ${formatValue(circumference)}`
+        "C = 2 × π × " +
+          radius,
+
+        "C ≈ " +
+          formatValue(circumference)
       ]
     };
   }
 
   return null;
 }
-
-
-// ============================================================
-// SPECIAL: LINEAR ALGEBRA
-// ============================================================
-//
-// Handles equations such as:
-//
-// 2x + 5 = 15
-// 3x - 7 = 11
-// x / 2 + 3 = 7
-// 5x = 25
-// x + 8 = 20
-//
-// The equation is converted into:
-//
-// ax + b = c
-//
-// Then:
-//
-// ax = c - b
-//
-// x = (c - b) / a
-// ============================================================
-
-function solveLinearEquation(text) {
-  let equation = text
-    .replace(/\s+/g, "")
-    .replace(/×/g, "*")
-    .replace(/−/g, "-");
-
-  if (
-    !equation.includes("=") ||
-    !/[xX]/.test(equation)
-  ) {
-    return null;
-  }
-
-  // Remove common wording.
-  equation = equation
-    .replace(
-      /^(solve|calculate|findx|find)x?/i,
-      ""
-    );
-
-  const parts =
-    equation.split("=");
-
-  if (parts.length !== 2) {
-    return null;
-  }
-
-  const left = parts[0];
-  const right = parts[1];
-
-  if (!left || !right) {
-    return null;
-  }
-
-  // Only simple linear expressions.
-  const linearPattern =
-    /^([+-]?\d*\.?\d*)x(?:([+-]\d+(?:\.\d+)?))?$/i;
-
-  const leftMatch =
-    left.match(linearPattern);
-
-  const rightMatch =
-    right.match(linearPattern);
-
-  const leftNumber =
-    parseConstantSide(left);
-
-  const rightNumber =
-    parseConstantSide(right);
-
-  let a = 0;
-  let b = 0;
-  let c = 0;
-  let d = 0;
-
-  if (leftMatch) {
-    a =
-      parseCoefficient(
-        leftMatch[1]
-      );
-
-    b =
-      leftMatch[2]
-        ? Number(leftMatch[2])
-        : 0;
-  } else if (
-    leftNumber !== null
-  ) {
-    b = leftNumber;
-  } else {
-    return null;
-  }
-
-  if (rightMatch) {
-    d =
-      parseCoefficient(
-        rightMatch[1]
-      );
-
-    c =
-      rightMatch[2]
-        ? Number(rightMatch[2])
-        : 0;
-  } else if (
-    rightNumber !== null
-  ) {
-    c = rightNumber;
-  } else {
-    return null;
-  }
-
-  // ax + b = dx + c
-  const coefficient =
-    a - d;
-
-  const constant =
-    c - b;
-
-  if (coefficient === 0) {
-    return null;
-  }
-
-  const x =
-    constant / coefficient;
-
-  return {
-    matched: true,
-    kind: "linear-equation",
-
-    expression: equation,
-
-    result: x,
-
-    formattedResult:
-      formatValue(x),
-
-    formula:
-      "ax + b = c  →  ax = c − b  →  x = (c − b) / a",
-
-    explanation:
-      "We isolate x by moving the constant term first, then divide by the coefficient of x.",
-
-    steps: [
-      `${formatValue(a)}x + ${formatValue(b)} = ${formatValue(c)}`,
-      `${formatValue(a)}x = ${formatValue(c)} − ${formatValue(b)}`,
-      `${formatValue(a)}x = ${formatValue(constant)}`,
-      `x = ${formatValue(constant)} ÷ ${formatValue(coefficient)}`,
-      `x = ${formatValue(x)}`
-    ]
-  };
-}
-
 function parseCoefficient(value) {
   if (value === "" || value === "+") {
     return 1;
@@ -1133,39 +1350,144 @@ function parseCoefficient(value) {
 
 function parseConstantSide(value) {
   if (
-    !/^[+-]?\d+(?:\.\d+)?$/.test(value)
+    /^[+-]?\d+(?:\.\d+)?$/.test(value)
+  ) {
+    return Number(value);
+  }
+
+  return null;
+}
+
+function solveLinearEquation(text) {
+  const equation = text
+    .replace(/\s+/g, "")
+    .replace(/×/g, "*")
+    .replace(/−/g, "-");
+
+  if (
+    !equation.includes("=") ||
+    !/[xX]/.test(equation)
   ) {
     return null;
   }
 
-  return Number(value);
+  const parts = equation.split("=");
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const left = parts[0];
+  const right = parts[1];
+
+  if (!left || !right) {
+    return null;
+  }
+
+  const pattern =
+    /^([+-]?\d*\.?\d*)x(?:([+-]\d+(?:\.\d+)?))?$/i;
+
+  const leftMatch =
+    left.match(pattern);
+
+  const rightMatch =
+    right.match(pattern);
+
+  const leftNumber =
+    parseConstantSide(left);
+
+  const rightNumber =
+    parseConstantSide(right);
+
+  let a = 0;
+  let b = 0;
+  let c = 0;
+  let d = 0;
+
+  if (leftMatch) {
+    a = parseCoefficient(
+      leftMatch[1]
+    );
+
+    b = leftMatch[2]
+      ? Number(leftMatch[2])
+      : 0;
+  } else if (leftNumber !== null) {
+    b = leftNumber;
+  } else {
+    return null;
+  }
+
+  if (rightMatch) {
+    d = parseCoefficient(
+      rightMatch[1]
+    );
+
+    c = rightMatch[2]
+      ? Number(rightMatch[2])
+      : 0;
+  } else if (rightNumber !== null) {
+    c = rightNumber;
+  } else {
+    return null;
+  }
+
+  const coefficient = a - d;
+  const constant = c - b;
+
+  if (coefficient === 0) {
+    return null;
+  }
+
+  const x =
+    constant / coefficient;
+
+  return {
+    matched: true,
+    kind: "linear-equation",
+    expression: equation,
+    result: x,
+    formattedResult:
+      formatValue(x),
+    formula:
+      "ax + b = c  →  ax = c − b  →  x = (c − b) / a",
+    explanation:
+      "We isolate x by moving the constant term first, then divide by the coefficient of x.",
+    steps: [
+      formatValue(a) +
+        "x + " +
+        formatValue(b) +
+        " = " +
+        formatValue(c),
+
+      formatValue(a) +
+        "x = " +
+        formatValue(c) +
+        " − " +
+        formatValue(b),
+
+      formatValue(a) +
+        "x = " +
+        formatValue(constant),
+
+      "x = " +
+        formatValue(constant) +
+        " ÷ " +
+        formatValue(coefficient),
+
+      "x = " +
+        formatValue(x)
+    ]
+  };
 }
 
-
-// ============================================================
-// SPECIAL: QUADRATIC EQUATION
-// ============================================================
-//
-// Handles:
-//
-// x² - 5x + 6 = 0
-// x^2 - 5x + 6 = 0
-//
-// Formula:
-//
-// x = (-b ± √(b² - 4ac)) / 2a
-// ============================================================
-
 function solveQuadraticEquation(text) {
-  let equation =
-    text
-      .replace(/\s+/g, "")
-      .replace(/×/g, "*")
-      .replace(/−/g, "-");
-
-  equation =
+  const equation =
     superscriptToNormal(
-      equation
+      text
+        .replace(/\s+/g, "")
+        .replace(/×/g, "*")
+        .replace(/−/g, "-")
     );
 
   if (
@@ -1175,49 +1497,38 @@ function solveQuadraticEquation(text) {
     return null;
   }
 
-  const parts =
-    equation.split("=");
+  const parts = equation.split("=");
 
-  if (parts.length !== 2) {
+  if (
+    parts.length !== 2 ||
+    parts[1] !== "0"
+  ) {
     return null;
   }
 
-  if (parts[1] !== "0") {
-    return null;
-  }
-
-  const left = parts[0];
-
-  const match =
-    left.match(
-      /^([+-]?\d*\.?\d*)x\^2([+-]\d*\.?\d*x)?([+-]\d+(?:\.\d+)?)?$/i
-    );
+  const match = parts[0].match(
+    /^([+-]?\d*\.?\d*)x\^2([+-]\d*\.?\d*x)?([+-]\d+(?:\.\d+)?)?$/i
+  );
 
   if (!match) {
     return null;
   }
 
-  const a =
-    parseCoefficient(
-      match[1]
-    );
+  const a = parseCoefficient(
+    match[1]
+  );
 
   let b = 0;
 
   if (match[2]) {
-    const coefficient =
-      match[2].replace(/x$/i, "");
-
-    b =
-      parseCoefficient(
-        coefficient
-      );
+    b = parseCoefficient(
+      match[2].replace(/x$/i, "")
+    );
   }
 
-  const c =
-    match[3]
-      ? Number(match[3])
-      : 0;
+  const c = match[3]
+    ? Number(match[3])
+    : 0;
 
   const discriminant =
     b * b - 4 * a * c;
@@ -1229,71 +1540,88 @@ function solveQuadraticEquation(text) {
     return {
       matched: true,
       kind: "quadratic-no-real",
-
       expression: equation,
-
       formula,
-
+      formattedResult:
+        "No real solution",
       explanation:
         "The discriminant is negative, so this equation has no real solutions.",
-
       steps: [
-        `D = b² − 4ac`,
-        `D = (${b})² − 4(${a})(${c})`,
-        `D = ${formatValue(discriminant)}`
+        "D = b² − 4ac",
+
+        "D = (" +
+          b +
+          ")² − 4(" +
+          a +
+          ")(" +
+          c +
+          ")",
+
+        "D = " +
+          formatValue(discriminant)
       ]
     };
   }
 
-  const sqrtD =
+  const squareRoot =
     Math.sqrt(discriminant);
 
   const x1 =
-    (-b + sqrtD) /
+    (-b + squareRoot) /
     (2 * a);
 
   const x2 =
-    (-b - sqrtD) /
+    (-b - squareRoot) /
     (2 * a);
-
-  const steps = [
-    `a = ${formatValue(a)}, b = ${formatValue(b)}, c = ${formatValue(c)}`,
-    `D = b² − 4ac`,
-    `D = (${b})² − 4(${a})(${c})`,
-    `D = ${formatValue(discriminant)}`,
-    `x = (−b ± √D) / 2a`,
-    `x₁ = ${formatValue(x1)}`,
-    `x₂ = ${formatValue(x2)}`
-  ];
 
   return {
     matched: true,
     kind: "quadratic-equation",
-
     expression: equation,
-
     result: [x1, x2],
-
     formattedResult:
-      `x₁ = ${formatValue(x1)}, x₂ = ${formatValue(x2)}`,
-
+      "x₁ = " +
+      formatValue(x1) +
+      ", x₂ = " +
+      formatValue(x2),
     formula,
-
     explanation:
-      "This is a quadratic equation. We use the quadratic formula to find its two possible solutions.",
+      "This is a quadratic equation. We use the quadratic formula to find its possible solutions.",
+    steps: [
+      "a = " +
+        formatValue(a) +
+        ", b = " +
+        formatValue(b) +
+        ", c = " +
+        formatValue(c),
 
-    steps
+      "D = b² − 4ac",
+
+      "D = (" +
+        b +
+        ")² − 4(" +
+        a +
+        ")(" +
+        c +
+        ")",
+
+      "D = " +
+        formatValue(discriminant),
+
+      "x = (−b ± √D) / 2a",
+
+      "x₁ = " +
+        formatValue(x1),
+
+      "x₂ = " +
+        formatValue(x2)
+    ]
   };
 }
 
+// ---------------- MAIN ----------------
 
-// ============================================================
-// MAIN MATH SOLVER
-// ============================================================
-
-export function trySolveMath(
-  rawInput
-) {
+export function trySolveMath(rawInput) {
   if (
     rawInput === null ||
     rawInput === undefined
@@ -1301,29 +1629,22 @@ export function trySolveMath(
     return null;
   }
 
-  let text =
+  const text =
     String(rawInput).trim();
 
   if (
     !text ||
-    text.length >
-      MAX_INPUT_LENGTH
+    text.length > MAX_INPUT_LENGTH
   ) {
     return null;
   }
 
   const cleaned =
-    extractMathExpression(
-      text
-    );
+    extractMathExpression(text);
 
   if (!cleaned) {
     return null;
   }
-
-  // ----------------------------------------------------------
-  // SPECIAL MATH TYPES FIRST
-  // ----------------------------------------------------------
 
   const square =
     solveSquare(cleaned);
@@ -1332,11 +1653,11 @@ export function trySolveMath(
     return square;
   }
 
-  const squareRoot =
+  const root =
     solveSquareRoot(cleaned);
 
-  if (squareRoot) {
-    return squareRoot;
+  if (root) {
+    return root;
   }
 
   const circle =
@@ -1346,67 +1667,43 @@ export function trySolveMath(
     return circle;
   }
 
-  // Equations containing x.
+  const fraction =
+    solveFractionExpression(cleaned);
+
+  if (fraction) {
+    return fraction;
+  }
+
   if (
     /[xX]/.test(cleaned) &&
     cleaned.includes("=")
   ) {
     const quadratic =
-      solveQuadraticEquation(
-        cleaned
-      );
+      solveQuadraticEquation(cleaned);
 
     if (quadratic) {
       return quadratic;
     }
 
     const linear =
-      solveLinearEquation(
-        cleaned
-      );
+      solveLinearEquation(cleaned);
 
     if (linear) {
       return linear;
     }
   }
 
-  // ----------------------------------------------------------
-  // NORMAL ARITHMETIC
-  // ----------------------------------------------------------
-
-  let expression =
-    cleaned
-      .replace(/\bpi\b/gi, "pi")
-      .trim();
-
-  // sqrt isn't handled by the general parser.
-  if (
-    /\bsqrt\b/i.test(expression)
-  ) {
-    return null;
-  }
-
-  // Convert pi into a token-compatible
-  // numeric constant.
-  expression =
-    expression.replace(
+  let expression = cleaned
+    .replace(
       /\bpi\b/gi,
       String(Math.PI)
-    );
+    )
+    .trim();
 
   if (
-    !/\d/.test(expression)
-  ) {
-    return null;
-  }
-
-  if (
-    !/[+\-*/^]/.test(expression)
-  ) {
-    return null;
-  }
-
-  if (
+    /\bsqrt\b/i.test(expression) ||
+    !/\d/.test(expression) ||
+    !/[+\-*/^]/.test(expression) ||
     !/^[\d+\-*/^().eE\s]+$/.test(
       expression
     )
@@ -1418,10 +1715,7 @@ export function trySolveMath(
     const tokens =
       tokenize(expression);
 
-    if (
-      !tokens ||
-      !tokens.length
-    ) {
+    if (!tokens.length) {
       return null;
     }
 
@@ -1431,41 +1725,26 @@ export function trySolveMath(
     const steps = [];
 
     const result =
-      evaluate(
-        ast,
-        steps
-      );
+      evaluate(ast, steps);
 
     return {
       matched: true,
       kind: "arithmetic",
-
       expression:
         nodeToText(ast),
-
       result,
-
       formattedResult:
         formatValue(result),
-
       steps,
-
       exact:
         typeof result === "bigint",
-
       formula: null,
       explanation: null
     };
-
   } catch (error) {
     return null;
   }
 }
-
-
-// ============================================================
-// EXPLANATION GENERATOR
-// ============================================================
 
 export function explainMathSolution(
   solved
@@ -1477,86 +1756,62 @@ export function explainMathSolution(
     return "";
   }
 
-  const lines = [];
-
-  // ----------------------------------------------------------
-  // ERROR
-  // ----------------------------------------------------------
-
   if (solved.error) {
-    lines.push(
-      `**${solved.error}**`
+    return (
+      "**" +
+      solved.error +
+      "**"
     );
-
-    return lines.join("\n");
   }
 
-  // ----------------------------------------------------------
-  // SQUARE ROOT
-  // ----------------------------------------------------------
-
   if (
-    solved.kind ===
-    "square-root"
+    solved.kind === "fraction" ||
+    solved.kind === "fraction-error"
   ) {
-    lines.push(
-      `**${solved.expression} = ${solved.formattedResult}**`
+    return explainFractionSolution(
+      solved
     );
-
-    lines.push("");
-
-    lines.push(
-      `**Formula:** ${solved.formula}`
-    );
-
-    lines.push("");
-
-    lines.push(
-      solved.explanation
-    );
-
-    lines.push("");
-
-    solved.steps.forEach(
-      (step, index) => {
-        lines.push(
-          `${index + 1}. ${step}`
-        );
-      }
-    );
-
-    return lines.join("\n");
   }
 
-  // ----------------------------------------------------------
-  // SQUARE
-  // ----------------------------------------------------------
+  if (
+    solved.kind === "square-root-error"
+  ) {
+    return (
+      "**" +
+      solved.error +
+      "**"
+    );
+  }
 
   if (
+    solved.kind === "square-root" ||
     solved.kind === "square"
   ) {
-    lines.push(
-      `**${solved.expression} = ${solved.formattedResult}**`
-    );
+    const lines = [
+      "**" +
+        solved.expression +
+        " = " +
+        solved.formattedResult +
+        "**",
 
-    lines.push("");
+      "",
 
-    lines.push(
-      `**Formula:** ${solved.formula}`
-    );
+      "**Formula:** " +
+        solved.formula,
 
-    lines.push("");
+      "",
 
-    lines.push(
-      solved.explanation
-    );
+      solved.explanation,
 
-    lines.push("");
+      ""
+    ];
 
     solved.steps.forEach(
       (step, index) => {
         lines.push(
-          `${index + 1}. ${step}`
+          index + 1 +
+            ". " +
+            step
         );
       }
     );
@@ -1564,87 +1819,76 @@ export function explainMathSolution(
     return lines.join("\n");
   }
 
-  // ----------------------------------------------------------
-  // CIRCLE / PI
-  // ----------------------------------------------------------
-
   if (
-    solved.kind ===
-      "circle-area" ||
+    solved.kind === "circle-area" ||
     solved.kind ===
       "circle-circumference"
   ) {
-    lines.push(
-      `**Answer: ${solved.formattedResult}**`
-    );
+    const lines = [
+      "**Answer: " +
+        solved.formattedResult +
+        "**",
 
-    lines.push("");
+      "",
 
-    lines.push(
-      `**Formula:** ${solved.formula}`
-    );
+      "**Formula:** " +
+        solved.formula,
 
-    lines.push("");
+      "",
 
-    lines.push(
-      solved.explanation
-    );
+      solved.explanation,
 
-    lines.push("");
+      ""
+    ];
 
     solved.steps.forEach(
       (step, index) => {
         lines.push(
-          `${index + 1}. ${step}`
+          index + 1 +
+            ". " +
+            step
         );
       }
     );
 
     return lines.join("\n");
   }
-
-  // ----------------------------------------------------------
-  // LINEAR EQUATION
-  // ----------------------------------------------------------
 
   if (
     solved.kind ===
     "linear-equation"
   ) {
-    lines.push(
-      `**Answer: x = ${solved.formattedResult}**`
-    );
+    const lines = [
+      "**Answer: x = " +
+        solved.formattedResult +
+        "**",
 
-    lines.push("");
+      "",
 
-    lines.push(
-      `**Formula:** ${solved.formula}`
-    );
+      "**Formula:** " +
+        solved.formula,
 
-    lines.push("");
+      "",
 
-    lines.push(
-      solved.explanation
-    );
+      solved.explanation,
 
-    lines.push("");
+      "",
 
-    lines.push("**Working:**");
+      "**Working:**"
+    ];
 
     solved.steps.forEach(
       (step, index) => {
         lines.push(
-          `${index + 1}. ${step}`
+          index + 1 +
+            ". " +
+            step
         );
       }
     );
 
     return lines.join("\n");
   }
-
-  // ----------------------------------------------------------
-  // QUADRATIC
-  // ----------------------------------------------------------
 
   if (
     solved.kind ===
@@ -1652,30 +1896,31 @@ export function explainMathSolution(
     solved.kind ===
       "quadratic-no-real"
   ) {
-    lines.push(
-      `**${solved.formattedResult ?? "No real solution"}**`
-    );
+    const lines = [
+      "**" +
+        solved.formattedResult +
+        "**",
 
-    lines.push("");
+      "",
 
-    lines.push(
-      `**Formula:** ${solved.formula}`
-    );
+      "**Formula:** " +
+        solved.formula,
 
-    lines.push("");
+      "",
 
-    lines.push(
-      solved.explanation
-    );
+      solved.explanation,
 
-    lines.push("");
+      "",
 
-    lines.push("**Working:**");
+      "**Working:**"
+    ];
 
     solved.steps.forEach(
       (step, index) => {
         lines.push(
-          `${index + 1}. ${step}`
+          index + 1 +
+            ". " +
+            step
         );
       }
     );
@@ -1683,13 +1928,13 @@ export function explainMathSolution(
     return lines.join("\n");
   }
 
-  // ----------------------------------------------------------
-  // NORMAL ARITHMETIC
-  // ----------------------------------------------------------
-
-  lines.push(
-    `**${solved.expression} = ${solved.formattedResult}**`
-  );
+  const lines = [
+    "**" +
+      solved.expression +
+      " = " +
+      solved.formattedResult +
+      "**"
+  ];
 
   if (
     solved.steps &&
@@ -1700,7 +1945,9 @@ export function explainMathSolution(
     solved.steps.forEach(
       (step, index) => {
         lines.push(
-          `${index + 1}. **${step.text}**`
+          index + 1 +
+            ". " +
+            step.text
         );
       }
     );
@@ -1708,11 +1955,6 @@ export function explainMathSolution(
 
   return lines.join("\n");
 }
-
-
-// ============================================================
-// DEFAULT EXPORT
-// ============================================================
 
 export default {
   trySolveMath,
