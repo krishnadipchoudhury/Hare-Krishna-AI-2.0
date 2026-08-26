@@ -1412,11 +1412,35 @@ button:disabled {
   transition: background .18s ease;
 }
 
+/* =====================================================
+   SIGN OUT SVG
+   ===================================================== */
+
+.logout-btn {
+  color: #e53935;
+}
+
+.logout-btn svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: block;
+  color: #e53935;
+  stroke: currentColor;
+}
+
+.logout-btn:hover {
+  color: #d32f2f;
+}
+
+.logout-btn:hover svg {
+  color: #d32f2f;
+}
 .side-btn:hover {
   background: var(--panel-2);
 }
 
-.side-btn.danger {
+.side-bt.n.danger {
   color: var(--danger);
 }
 
