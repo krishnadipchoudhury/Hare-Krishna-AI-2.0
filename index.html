@@ -201,8 +201,23 @@
 
       <div class="chat-list-wrap">
 
+        <div
+          id="pinnedSection"
+          class="pinned-section hidden">
+
+          <div class="chat-list-title">
+            Pinned
+          </div>
+
+          <div
+            id="pinnedList"
+            class="chat-list">
+          </div>
+
+        </div>
+
         <div class="chat-list-title">
-          Your chats
+          Recents
         </div>
 
         <div
@@ -410,6 +425,38 @@
 
           <button
             class="icon-btn"
+            id="incognitoBtn"
+            type="button"
+            title="Toggle incognito chat"
+            aria-label="Toggle incognito chat">
+
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true">
+
+              <path d="M3 12h1"></path>
+              <path d="M20 12h1"></path>
+              <path d="M5.5 7.5 12 11l6.5-3.5"></path>
+              <path d="M4 16c1.5-2.5 4.5-4 8-4s6.5 1.5 8 4"></path>
+              <circle cx="8" cy="14.5" r="1.6"></circle>
+              <circle cx="16" cy="14.5" r="1.6"></circle>
+              <path d="M9.5 14.5h5"></path>
+              <path d="M2 12a10 10 0 0 1 20 0"></path>
+
+            </svg>
+
+          </button>
+
+
+          <button
+            class="icon-btn"
             id="shareBtn"
             type="button"
             title="Share current chat"
@@ -434,6 +481,38 @@
         </div>
 
       </header>
+
+
+      <!-- INCOGNITO BANNER -->
+
+      <div
+        id="incognitoBanner"
+        class="incognito-banner hidden">
+
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true">
+
+          <path d="M5.5 7.5 12 11l6.5-3.5"></path>
+          <path d="M4 16c1.5-2.5 4.5-4 8-4s6.5 1.5 8 4"></path>
+          <circle cx="8" cy="14.5" r="1.6"></circle>
+          <circle cx="16" cy="14.5" r="1.6"></circle>
+          <path d="M9.5 14.5h5"></path>
+
+        </svg>
+
+        <span>
+          Incognito chat — this conversation won't be saved
+        </span>
+
+      </div>
 
 
       <!-- CHAT AREA -->
@@ -1026,6 +1105,118 @@
         id="legalContent"
         class="legal-content">
       </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       SELECT TEXT MODAL (full screen, read-only)
+       ===================================================== -->
+
+  <div
+    class="modal hidden select-text-modal"
+    id="selectTextModal">
+
+    <div class="modal-card select-text-card">
+
+      <div class="select-text-header">
+
+        <h2>Select Text</h2>
+
+        <button
+          class="modal-close"
+          data-close="selectTextModal"
+          type="button"
+          aria-label="Close">
+
+          ×
+
+        </button>
+
+      </div>
+
+      <p class="select-text-hint">
+        Tap and drag to select, then use your device's copy option.
+      </p>
+
+      <textarea
+        id="selectTextArea"
+        class="select-text-area"
+        readonly
+        spellcheck="false"></textarea>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       CODE FULLSCREEN MODAL
+       ===================================================== -->
+
+  <div
+    class="modal hidden code-fullscreen-modal"
+    id="codeFullscreenModal">
+
+    <div class="code-fullscreen-card">
+
+      <div class="code-fullscreen-toolbar">
+
+        <button
+          class="code-tool-btn"
+          id="codeFullscreenBackBtn"
+          type="button"
+          title="Back"
+          aria-label="Back">
+
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true">
+
+            <path d="M19 12H5"></path>
+            <path d="M11 18l-6-6 6-6"></path>
+
+          </svg>
+
+        </button>
+
+        <button
+          class="code-tool-btn"
+          id="codeFullscreenCopyBtn"
+          type="button"
+          title="Copy code"
+          aria-label="Copy code">
+
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true">
+
+            <rect x="9" y="9" width="12" height="12" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+
+          </svg>
+
+        </button>
+
+      </div>
+
+      <pre class="code-fullscreen-pre"><code id="codeFullscreenContent"></code></pre>
 
     </div>
 
