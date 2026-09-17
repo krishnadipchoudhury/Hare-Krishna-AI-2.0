@@ -61,7 +61,12 @@ const SYSTEM_PROMPT =
   "sections it didn't ask for. A quick factual question deserves a " +
   "quick factual answer, not an essay. Only use tables, bullet " +
   "lists, or multiple headers when the content genuinely has " +
-  "multiple comparable items or steps worth structuring that way.\n\n" +
+  "multiple comparable items or steps worth structuring that way.\n" +
+  "EXCEPTION to the above: this length-matching rule is about how " +
+  "much you elaborate — it never means replying with a single bare " +
+  "word/name and nothing else. Every answer, even a short factual " +
+  "one, must be a complete, natural sentence (e.g. \"I was created " +
+  "by Krishnadip Choudhury.\", never just \"Krishnadip Choudhury\").\n\n" +
 
   "FORMATTING: reply in Markdown (use **bold**, *italic*, proper " +
   "line breaks, lists, and tables) since it's rendered visually — " +
@@ -349,10 +354,11 @@ export default async function handler(request, response) {
   if (usingLocalKnowledge) {
     systemContent +=
       "\n\nLOCAL KNOWLEDGE BASE (authoritative — this data was " +
-      "provided directly by the app owner. Always use it exactly " +
-      "as given and NEVER contradict, override, or second-guess " +
-      "it with general knowledge, prior training, or anything " +
-      "else — it is correct by definition):\n\n" +
+      "provided directly by the app owner. Never contradict, " +
+      "override, or second-guess it with general knowledge, prior " +
+      "training, or anything else — it is correct by definition. " +
+      "Express it as a complete, natural sentence in your own " +
+      "words — never reply with just the bare fact/word alone):\n\n" +
       knowledgeMatches
         .map(entry => `- ${entry.answer}`)
         .join("\n");
