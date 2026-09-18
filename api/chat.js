@@ -10,12 +10,12 @@ import knowledgeEntries from "../knowledge/knowledgeData.js";
 const JINA_API_URL = "https://api.jina.ai/v1/embeddings";
 const JINA_MODEL = "jina-embeddings-v5-text-small";
 
-// Similarity required before local knowledge is considered a match.
 const KNOWLEDGE_MATCH_THRESHOLD = 0.78;
 
-// ------------------------------------------------------------
-// Read JSON body
-// ------------------------------------------------------------
+
+// ============================================================
+// READ JSON BODY
+// ============================================================
 
 async function readJsonBody(request) {
   if (request.body && typeof request.body === "object") {
@@ -28,7 +28,9 @@ async function readJsonBody(request) {
     body += chunk.toString();
   }
 
-  if (!body) return {};
+  if (!body) {
+    return {};
+  }
 
   try {
     return JSON.parse(body);
@@ -37,11 +39,16 @@ async function readJsonBody(request) {
   }
 }
 
-// ------------------------------------------------------------
-// Fetch with timeout
-// ------------------------------------------------------------
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+// ============================================================
+// FETCH WITH TIMEOUT
+// ============================================================
+
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = 15000
+) {
   const controller = new AbortController();
 
   const timeout = setTimeout(() => {
@@ -58,9 +65,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
-// ------------------------------------------------------------
-// Build searchable text from knowledge entry
-// ------------------------------------------------------------
+
+// ============================================================
+// BUILD KNOWLEDGE TEXT
+// ============================================================
 
 function buildKnowledgeText(entry) {
   const question =
@@ -68,9 +76,10 @@ function buildKnowledgeText(entry) {
       ? entry.question
       : "";
 
-  const keywords = Array.isArray(entry.keywords)
-    ? entry.keywords.join(", ")
-    : "";
+  const keywords =
+    Array.isArray(entry.keywords)
+      ? entry.keywords.join(", ")
+      : "";
 
   const answer =
     typeof entry.answer === "string"
@@ -86,18 +95,24 @@ function buildKnowledgeText(entry) {
     .join("\n");
 }
 
-// ------------------------------------------------------------
-// Cosine similarity
-// ------------------------------------------------------------
+
+// ============================================================
+// COSINE SIMILARITY
+// ============================================================
 
 function cosineSimilarity(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) {
     return 0;
   }
 
-  const length = Math.min(a.length, b.length);
+  const length = Math.min(
+    a.length,
+    b.length
+  );
 
-  if (length === 0) return 0;
+  if (length === 0) {
+    return 0;
+  }
 
   let dot = 0;
   let magnitudeA = 0;
@@ -112,103 +127,163 @@ function cosineSimilarity(a, b) {
     magnitudeB += y * y;
   }
 
-  if (magnitudeA === 0 || magnitudeB === 0) {
+  if (
+    magnitudeA === 0 ||
+    magnitudeB === 0
+  ) {
     return 0;
   }
 
-  return dot / (
-    Math.sqrt(magnitudeA) *
-    Math.sqrt(magnitudeB)
+  return (
+    dot /
+    (
+      Math.sqrt(magnitudeA) *
+      Math.sqrt(magnitudeB)
+    )
   );
 }
 
-// ------------------------------------------------------------
-// Get embeddings from Jina
-// ------------------------------------------------------------
 
-async function getJinaEmbeddings(input, task) {
+// ============================================================
+// GET JINA EMBEDDINGS
+// ============================================================
+
+async function getJinaEmbeddings(
+  input,
+  task
+) {
   if (!process.env.JINA_API_KEY) {
-    throw new Error("JINA_API_KEY is not configured");
+    throw new Error(
+      "JINA_API_KEY is not configured"
+    );
   }
 
-  const response = await fetchWithTimeout(
-    JINA_API_URL,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.JINA_API_KEY}`
+  const response =
+    await fetchWithTimeout(
+      JINA_API_URL,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          "Authorization":
+            `Bearer ${process.env.JINA_API_KEY}`
+        },
+
+        body: JSON.stringify({
+          model: JINA_MODEL,
+
+          task,
+
+          dimensions: 512,
+
+          input
+        })
       },
-      body: JSON.stringify({
-        model: JINA_MODEL,
-        task,
-        dimensions: 512,
-        input
-      })
-    },
-    15000
-  );
+
+      15000
+    );
 
   if (!response.ok) {
-    const errorText = await response.text();
+    const errorText =
+      await response.text();
 
     throw new Error(
       `Jina API error ${response.status}: ${errorText}`
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (
     !data ||
     !Array.isArray(data.data)
   ) {
-    throw new Error("Invalid response from Jina");
+    throw new Error(
+      "Invalid response from Jina"
+    );
   }
 
-  return data.data.map(item => item.embedding);
+  return data.data.map(
+    item => item.embedding
+  );
 }
 
-// ------------------------------------------------------------
-// Semantic knowledge search
-// ------------------------------------------------------------
 
-async function findKnowledgeMatch(message, entries) {
-  if (!Array.isArray(entries) || entries.length === 0) {
+// ============================================================
+// JINA SEMANTIC KNOWLEDGE SEARCH
+// ============================================================
+
+async function findKnowledgeMatch(
+  message,
+  entries
+) {
+  if (
+    !Array.isArray(entries) ||
+    entries.length === 0
+  ) {
     return null;
   }
 
-  const documents = entries
-    .map(buildKnowledgeText)
-    .filter(Boolean);
+  const documents =
+    entries
+      .map(buildKnowledgeText)
+      .filter(Boolean);
 
   if (documents.length === 0) {
     return null;
   }
 
-  // Embed the user's question.
-  const [queryEmbedding] = await getJinaEmbeddings(
-    [message],
-    "retrieval.query"
-  );
 
-  // Embed all local knowledge entries.
-  const documentEmbeddings = await getJinaEmbeddings(
-    documents,
-    "retrieval.passage"
-  );
+  // ----------------------------------------------------------
+  // STEP 1
+  // Embed user's question
+  // ----------------------------------------------------------
+
+  const [queryEmbedding] =
+    await getJinaEmbeddings(
+      [message],
+      "retrieval.query"
+    );
+
+
+  // ----------------------------------------------------------
+  // STEP 2
+  // Embed local knowledge
+  // ----------------------------------------------------------
+
+  const documentEmbeddings =
+    await getJinaEmbeddings(
+      documents,
+      "retrieval.passage"
+    );
+
+
+  // ----------------------------------------------------------
+  // STEP 3
+  // Find highest similarity
+  // ----------------------------------------------------------
 
   let bestMatch = null;
 
-  for (let i = 0; i < documentEmbeddings.length; i++) {
-    const similarity = cosineSimilarity(
-      queryEmbedding,
-      documentEmbeddings[i]
-    );
+  for (
+    let i = 0;
+    i < documentEmbeddings.length;
+    i++
+  ) {
+    const similarity =
+      cosineSimilarity(
+        queryEmbedding,
+        documentEmbeddings[i]
+      );
 
     if (
       !bestMatch ||
-      similarity > bestMatch.similarity
+      similarity >
+        bestMatch.similarity
     ) {
       bestMatch = {
         entry: entries[i],
@@ -217,9 +292,16 @@ async function findKnowledgeMatch(message, entries) {
     }
   }
 
+
+  // ----------------------------------------------------------
+  // STEP 4
+  // Apply 0.78 threshold
+  // ----------------------------------------------------------
+
   if (
     !bestMatch ||
-    bestMatch.similarity < KNOWLEDGE_MATCH_THRESHOLD
+    bestMatch.similarity <
+      KNOWLEDGE_MATCH_THRESHOLD
   ) {
     return null;
   }
@@ -227,61 +309,98 @@ async function findKnowledgeMatch(message, entries) {
   return bestMatch;
 }
 
-// ------------------------------------------------------------
-// Tavily web search
-// ------------------------------------------------------------
+
+// ============================================================
+// TAVILY WEB SEARCH
+// ============================================================
 
 async function searchWeb(message) {
   if (!process.env.TAVILY_API_KEY) {
-    return {
-      results: [],
-      sources: []
-    };
-  }
-
-  const response = await fetchWithTimeout(
-    "https://api.tavily.com/search",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        api_key: process.env.TAVILY_API_KEY,
-        query: message,
-        max_results: 5,
-        search_depth: "basic"
-      })
-    },
-    10000
-  );
-
-  if (!response.ok) {
     throw new Error(
-      `Tavily API error ${response.status}`
+      "TAVILY_API_KEY is not configured"
     );
   }
 
-  const data = await response.json();
+  console.log(
+    "WEB SEARCH STARTED:",
+    message
+  );
 
-  const results = Array.isArray(data.results)
-    ? data.results
-    : [];
+  const response =
+    await fetchWithTimeout(
+      "https://api.tavily.com/search",
+      {
+        method: "POST",
 
-  const sources = results.map(result => ({
-    title: result.title || result.url,
-    url: result.url
-  }));
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          api_key:
+            process.env.TAVILY_API_KEY,
+
+          query: message,
+
+          max_results: 5,
+
+          search_depth: "basic"
+        })
+      },
+
+      10000
+    );
+
+
+  console.log(
+    "TAVILY STATUS:",
+    response.status
+  );
+
+
+  if (!response.ok) {
+    const errorText =
+      await response.text();
+
+    throw new Error(
+      `Tavily API error ${response.status}: ${errorText}`
+    );
+  }
+
+  const data =
+    await response.json();
+
+  const results =
+    Array.isArray(data.results)
+      ? data.results
+      : [];
+
+  const sources =
+    results.map(result => ({
+      title:
+        result.title ||
+        result.url,
+
+      url:
+        result.url
+    }));
 
   return {
     results,
     sources
   };
-}// ------------------------------------------------------------
-// Main API handler
-// ------------------------------------------------------------
+}
 
-export default async function handler(request, response) {
+
+// ============================================================
+// MAIN API HANDLER
+// ============================================================
+
+export default async function handler(
+  request,
+  response
+) {
   if (request.method !== "POST") {
     response.status(405).json({
       error: "Method not allowed"
@@ -296,31 +415,43 @@ export default async function handler(request, response) {
     clientDisconnected = true;
   });
 
+
   try {
-    const body = await readJsonBody(request);
+
+    // ========================================================
+    // READ REQUEST
+    // ========================================================
+
+    const body =
+      await readJsonBody(request);
 
     const message =
       typeof body.message === "string"
         ? body.message.trim()
         : "";
 
+
     const history =
       Array.isArray(body.history)
         ? body.history
             .filter(item =>
               item &&
-              (item.role === "user" ||
-               item.role === "assistant") &&
+              (
+                item.role === "user" ||
+                item.role === "assistant"
+              ) &&
               typeof item.content === "string"
             )
             .slice(-10)
         : [];
+
 
     const facts =
       body.facts &&
       typeof body.facts === "object"
         ? body.facts
         : {};
+
 
     if (!message) {
       response.status(400).json({
@@ -330,18 +461,27 @@ export default async function handler(request, response) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Math
-    // ----------------------------------------------------------
 
-    const mathSolved = trySolveMath(message);
+    // ========================================================
+    // MATH
+    // ========================================================
+
+    const mathSolved =
+      trySolveMath(message);
 
     if (mathSolved !== null) {
+
       response.writeHead(200, {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
+        "Content-Type":
+          "text/plain; charset=utf-8",
+
+        "Cache-Control":
+          "no-cache",
+
+        "Connection":
+          "keep-alive"
       });
+
 
       response.write(
         JSON.stringify({
@@ -350,6 +490,7 @@ export default async function handler(request, response) {
         }) + "\n"
       );
 
+
       response.write(
         JSON.stringify({
           type: "sources",
@@ -357,8 +498,11 @@ export default async function handler(request, response) {
         }) + "\n"
       );
 
+
       response.write(
-        explainMathSolution(mathSolved)
+        explainMathSolution(
+          mathSolved
+        )
       );
 
       response.end();
@@ -366,59 +510,117 @@ export default async function handler(request, response) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Start response
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // START STREAMING RESPONSE
+    // ========================================================
 
     response.writeHead(200, {
-      "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-      "Transfer-Encoding": "chunked"
+      "Content-Type":
+        "text/plain; charset=utf-8",
+
+      "Cache-Control":
+        "no-cache",
+
+      "Connection":
+        "keep-alive",
+
+      "Transfer-Encoding":
+        "chunked"
     });
 
-    // ----------------------------------------------------------
-    // Jina semantic knowledge search
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // JINA SEMANTIC SEARCH
+    // ========================================================
 
     let knowledgeMatch = null;
+
     let usingLocalKnowledge = false;
 
+
     try {
-      knowledgeMatch = await findKnowledgeMatch(
-        message,
-        knowledgeEntries
+
+      console.log(
+        "JINA SEARCH STARTED:",
+        message
       );
 
+
+      knowledgeMatch =
+        await findKnowledgeMatch(
+          message,
+          knowledgeEntries
+        );
+
+
       if (knowledgeMatch) {
+
         usingLocalKnowledge = true;
+
+
+        console.log(
+          "LOCAL KNOWLEDGE MATCH:",
+          knowledgeMatch.similarity
+        );
+
+      } else {
+
+        console.log(
+          "NO LOCAL KNOWLEDGE MATCH"
+        );
+
       }
+
     } catch (error) {
+
       console.error(
         "Jina semantic search failed:",
         error.message
       );
 
-      // Jina failure should NOT break the chatbot.
-      // We simply continue to Tavily + Groq.
+      // Jina failure does not crash
+      // the chatbot.
+      //
+      // We continue to Tavily.
+
+
+      knowledgeMatch = null;
     }
+
+
+    // ========================================================
+    // SEND SEARCH STATUS
+    // ========================================================
 
     response.write(
       JSON.stringify({
         type: "status",
-        searching: !usingLocalKnowledge
+
+        searching:
+          !usingLocalKnowledge
       }) + "\n"
     );
 
-    // ----------------------------------------------------------
-    // Search context
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // SEARCH CONTEXT
+    // ========================================================
 
     let searchContext = "";
+
     let sources = [];
 
+
+    // ========================================================
+    // YES → LOCAL KNOWLEDGE
+    // ========================================================
+
     if (knowledgeMatch) {
-      const entry = knowledgeMatch.entry;
+
+      const entry =
+        knowledgeMatch.entry;
+
 
       searchContext = `
 LOCAL KNOWLEDGE MATCH
@@ -440,43 +642,80 @@ Answer:
 ${entry.answer || ""}
 `;
 
+
+    // ========================================================
+    // IMPORTANT:
+    //
+    // TAVILY IS NOT CALLED HERE.
+    //
+    // If similarity >= 0.78,
+    // the request goes directly
+    // to Groq using local knowledge.
+    // ========================================================
+
+
     } else {
-      // --------------------------------------------------------
-      // Tavily fallback
-      // --------------------------------------------------------
+
+      // ======================================================
+      // NO LOCAL MATCH → TAVILY
+      // ======================================================
 
       try {
-        const webData = await searchWeb(message);
 
-        sources = webData.sources;
+        console.log(
+          "CALLING TAVILY..."
+        );
 
-        searchContext = webData.results
-          .map((result, index) => {
-            return `[${index + 1}] ${
-              result.title || "Untitled"
-            }
-            
+
+        const webData =
+          await searchWeb(
+            message
+          );
+
+
+        sources =
+          webData.sources;
+
+
+        searchContext =
+          webData.results
+            .map(
+              (result, index) => {
+
+                return `[${index + 1}] ${
+                  result.title ||
+                  "Untitled"
+                }
+
 ${result.content || ""}
 
-Source: ${result.url || ""}`;
-          })
-          .join("\n\n");
+Source: ${
+  result.url || ""
+}`;
+              }
+            )
+            .join("\n\n");
+
 
       } catch (error) {
+
         console.error(
           "Tavily search failed:",
           error.message
         );
+
       }
     }
+
 
     if (clientDisconnected) {
       return;
     }
 
-    // ----------------------------------------------------------
-    // Send sources to frontend
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // SEND SOURCES
+    // ========================================================
 
     response.write(
       JSON.stringify({
@@ -485,160 +724,244 @@ Source: ${result.url || ""}`;
       }) + "\n"
     );
 
-    // ----------------------------------------------------------
-    // Build user facts
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // USER FACTS
+    // ========================================================
 
     let factsText = "";
 
     try {
-      factsText = JSON.stringify(facts, null, 2);
+
+      factsText =
+        JSON.stringify(
+          facts,
+          null,
+          2
+        );
+
     } catch {
+
       factsText = "{}";
+
     }
 
-    // ----------------------------------------------------------
-    // System prompt
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // SYSTEM PROMPT
+    // ========================================================
 
     const systemPrompt = `
-You are Harekrishna AI 2.0.
+You are Harekrishna AI 2.5.
 
-Answer the user's question naturally, accurately,
-and clearly.
+Answer the user's question naturally,
+accurately, and clearly.
 
 IMPORTANT RULES:
 
 1. Match the answer length to the question.
 2. Do not give unnecessarily long answers.
 3. Use Markdown when useful.
-4. Use headings, bullet points, and bold text when they
-   improve readability.
+4. Use headings, bullet points, and bold text
+   when they improve readability.
 5. Do not invent facts.
 6. Do not invent personal information about the user.
 7. If the user asks a simple question, answer simply.
 8. If the user asks for an explanation, explain clearly.
 9. If current information is provided by web search,
    use it carefully.
-10. Never claim that you searched the web unless web
-    search actually happened.
+10. Never claim that you searched the web unless
+    web search actually happened.
 
 USER FACTS:
 ${factsText}
-
 `;
 
     let contextInstruction = "";
 
-    if (knowledgeMatch) {
-      contextInstruction = `
-A relevant answer was found in the local knowledge base.
 
-Use this local knowledge as the authoritative source
-for this question.
+    // ========================================================
+    // LOCAL KNOWLEDGE CONTEXT
+    // ========================================================
+
+    if (knowledgeMatch) {
+
+      contextInstruction = `
+A relevant answer was found in the local
+knowledge base.
+
+Use this local knowledge as the authoritative
+source for this question.
 
 You may rewrite or explain the answer naturally,
 but do not contradict the supplied local knowledge.
 
 LOCAL KNOWLEDGE:
+
 ${searchContext}
 `;
+
+
+    // ========================================================
+    // WEB SEARCH CONTEXT
+    // ========================================================
+
     } else if (searchContext) {
+
       contextInstruction = `
 WEB SEARCH RESULTS:
 
 Use these results when they are relevant.
+
 Prefer the information in the results for current
 or time-sensitive questions.
 
+Do not claim that you searched the web unless
+these web search results were actually obtained.
+
 ${searchContext}
 `;
+
+
+    // ========================================================
+    // NO SEARCH RESULTS
+    // ========================================================
+
     } else {
+
       contextInstruction = `
-No local knowledge match or web-search context was found.
+No local knowledge match or web-search context
+was found.
 
 Answer using your general knowledge.
-If you are uncertain, say so instead of inventing information.
+
+If you are uncertain, say so instead of
+inventing information.
 `;
+
     }
 
-    // ----------------------------------------------------------
-    // Groq messages
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // GROQ MESSAGES
+    // ========================================================
 
     const messages = [
+
       {
         role: "system",
+
         content:
           systemPrompt +
           "\n\n" +
           contextInstruction
       },
+
       ...history,
+
       {
         role: "user",
+
         content: message
       }
+
     ];
 
-    // ----------------------------------------------------------
-    // Groq streaming
-    // ----------------------------------------------------------
+
+    // ========================================================
+    // GROQ API KEY
+    // ========================================================
 
     if (!process.env.GROQ_API_KEY) {
+
       throw new Error(
         "GROQ_API_KEY is not configured"
       );
+
     }
 
-    const groqResponse = await fetchWithTimeout(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization":
-            `Bearer ${process.env.GROQ_API_KEY}`
+
+    // ========================================================
+    // GROQ STREAMING
+    // ========================================================
+
+    const groqResponse =
+      await fetchWithTimeout(
+        "https://api.groq.com/openai/v1/chat/completions",
+
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            "Authorization":
+              `Bearer ${process.env.GROQ_API_KEY}`
+          },
+
+          body: JSON.stringify({
+            model:
+              "openai/gpt-oss-20b",
+
+            messages,
+
+            stream: true,
+
+            temperature: 0.7
+          })
         },
-        body: JSON.stringify({
-          model: "openai/gpt-oss-20b",
-          messages,
-          stream: true,
-          temperature: 0.7
-        })
-      },
-      15000
-    );
+
+        15000
+      );
+
 
     if (!groqResponse.ok) {
-      const errorText = await groqResponse.text();
+
+      const errorText =
+        await groqResponse.text();
 
       throw new Error(
         `Groq API error ${groqResponse.status}: ${errorText}`
       );
+
     }
 
+
     if (!groqResponse.body) {
+
       throw new Error(
         "Groq returned no response body"
       );
-    }
 
-    // ----------------------------------------------------------
-    // Read Groq SSE stream
-    // ----------------------------------------------------------
+    }
+    // ========================================================
+    // READ GROQ SSE STREAM
+    // ========================================================
 
     const reader =
       groqResponse.body.getReader();
 
+
     const decoder =
       new TextDecoder();
 
+
     let buffer = "";
-    let lastDataTime = Date.now();
+
+
+    let lastDataTime =
+      Date.now();
+
 
     while (true) {
+
+      // ------------------------------------------------------
+      // Client disconnected
+      // ------------------------------------------------------
+
       if (clientDisconnected) {
+
         try {
           await reader.cancel();
         } catch {}
@@ -646,110 +969,207 @@ If you are uncertain, say so instead of inventing information.
         return;
       }
 
-      const readPromise = reader.read();
 
-      const stallPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          reject(
-            new Error(
-              "Groq stream stalled"
-            )
-          );
-        }, 20000);
-      });
+      // ------------------------------------------------------
+      // Read next chunk
+      // ------------------------------------------------------
 
-      const { value, done } =
+      const readPromise =
+        reader.read();
+
+
+      const stallPromise =
+        new Promise((_, reject) => {
+
+          setTimeout(() => {
+
+            reject(
+              new Error(
+                "Groq stream stalled"
+              )
+            );
+
+          }, 20000);
+
+        });
+
+
+      const {
+        value,
+        done
+      } =
         await Promise.race([
           readPromise,
           stallPromise
         ]);
 
+
       if (done) {
         break;
       }
 
-      lastDataTime = Date.now();
 
-      buffer += decoder.decode(
-        value,
-        { stream: true }
-      );
+      lastDataTime =
+        Date.now();
 
-      const lines = buffer.split("\n");
 
-      buffer = lines.pop() || "";
+      buffer +=
+        decoder.decode(
+          value,
+          {
+            stream: true
+          }
+        );
+
+
+      // ------------------------------------------------------
+      // Split SSE lines
+      // ------------------------------------------------------
+
+      const lines =
+        buffer.split("\n");
+
+
+      buffer =
+        lines.pop() || "";
+
+
+      // ------------------------------------------------------
+      // Process every line
+      // ------------------------------------------------------
 
       for (const line of lines) {
-        const trimmed = line.trim();
 
-        if (!trimmed) continue;
+        const trimmed =
+          line.trim();
 
-        if (!trimmed.startsWith("data:")) {
+
+        if (!trimmed) {
           continue;
         }
 
-        const data = trimmed
-          .slice(5)
-          .trim();
 
-        if (data === "[DONE]") {
+        if (
+          !trimmed.startsWith(
+            "data:"
+          )
+        ) {
           continue;
         }
+
+
+        const data =
+          trimmed
+            .slice(5)
+            .trim();
+
+
+        if (
+          data === "[DONE]"
+        ) {
+          continue;
+        }
+
 
         try {
+
           const parsed =
             JSON.parse(data);
 
+
           const content =
-            parsed?.choices?.[0]?.delta?.content;
+            parsed
+              ?.choices?.[0]
+              ?.delta?.content;
+
 
           if (
             typeof content === "string" &&
             content.length > 0 &&
             !clientDisconnected
           ) {
-            response.write(content);
+
+            response.write(
+              content
+            );
+
           }
+
         } catch {
-          // Ignore malformed SSE chunks.
+
+          // Ignore malformed
+          // SSE chunks.
+
         }
       }
 
+
+      // ------------------------------------------------------
+      // Stream timeout
+      // ------------------------------------------------------
+
       if (
-        Date.now() - lastDataTime > 20000
+        Date.now() -
+          lastDataTime >
+        20000
       ) {
+
         throw new Error(
           "Groq stream timeout"
         );
+
       }
+
     }
+
+
+    // ========================================================
+    // FINISH RESPONSE
+    // ========================================================
 
     response.end();
 
+
   } catch (error) {
+
+    // ========================================================
+    // GLOBAL ERROR HANDLER
+    // ========================================================
+
     console.error(
       "Chat API error:",
       error
     );
 
+
     if (!response.headersSent) {
+
       response.status(500).json({
+
         error:
           error?.message ||
           "Something went wrong"
+
       });
 
       return;
     }
 
+
     if (!clientDisconnected) {
+
       try {
+
         response.write(
           "\n\nSorry, something went wrong while generating the response."
         );
 
         response.end();
+
       } catch {}
+
     }
+
   }
+
 }
