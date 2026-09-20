@@ -195,10 +195,32 @@ async function getJinaEmbeddings(input, task) {
 // ============================================================
 // JINA SEMANTIC KNOWLEDGE SEARCH
 // ============================================================
+//
+// FIX: this used to call getJinaEmbeddings() on the FULL knowledge
+// base on every single incoming message — two Jina calls per
+// message (one for the query, one re-embedding every document in
+// knowledge/knowledgeData.js from scratch), even for messages that
+// had nothing to do with local knowledge. That burns through Jina's
+// rate limit fast and adds a full extra network round-trip (with
+// its own 15s timeout) in front of Tavily/Groq on every request,
+// which was very likely a contributor to the intermittent failures
+// that fell back to the local demo engine.
+//
+// The knowledge base only changes on deploy, so its embeddings are
+// computed ONCE per warm server instance and cached in module scope
+// below. Every request after the first reuses the cached vectors —
+// only the (tiny) per-message query embedding is still computed
+// fresh each time.
 
-async function findKnowledgeMatch(message, entries) {
-  if (!Array.isArray(entries) || entries.length === 0) {
-    return null;
+let cachedDocumentEmbeddings = null;
+let cachedDocumentEntries = null;
+
+async function getDocumentEmbeddings(entries) {
+  if (
+    cachedDocumentEmbeddings &&
+    cachedDocumentEntries === entries
+  ) {
+    return cachedDocumentEmbeddings;
   }
 
   const documents =
@@ -207,18 +229,39 @@ async function findKnowledgeMatch(message, entries) {
       .filter(Boolean);
 
   if (documents.length === 0) {
+    cachedDocumentEmbeddings = [];
+    cachedDocumentEntries = entries;
+    return cachedDocumentEmbeddings;
+  }
+
+  const embeddings =
+    await getJinaEmbeddings(documents, "retrieval.passage");
+
+  cachedDocumentEmbeddings = embeddings;
+  cachedDocumentEntries = entries;
+
+  return embeddings;
+}
+
+async function findKnowledgeMatch(message, entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
     return null;
   }
 
-  // STEP 1 — embed user's question
+  const documentEmbeddings =
+    await getDocumentEmbeddings(entries);
+
+  if (documentEmbeddings.length === 0) {
+    return null;
+  }
+
+  // STEP 1 — embed user's question (the only embedding call that
+  // still has to happen fresh on every request)
   const [queryEmbedding] =
     await getJinaEmbeddings([message], "retrieval.query");
 
-  // STEP 2 — embed local knowledge
-  const documentEmbeddings =
-    await getJinaEmbeddings(documents, "retrieval.passage");
-
-  // STEP 3 — find highest similarity
+  // STEP 2 — find highest similarity against the cached document
+  // embeddings
   let bestMatch = null;
 
   for (let i = 0; i < documentEmbeddings.length; i++) {
@@ -235,7 +278,7 @@ async function findKnowledgeMatch(message, entries) {
     }
   }
 
-  // STEP 4 — apply threshold
+  // STEP 3 — apply threshold
   if (!bestMatch || bestMatch.similarity < KNOWLEDGE_MATCH_THRESHOLD) {
     return null;
   }
@@ -595,7 +638,13 @@ instead of inventing information.
           temperature: 0.7
         })
       },
-      15000
+      // FIX: 15s was too tight — a cold or briefly slow Groq
+      // response would abort and throw before any tokens streamed
+      // back, which is indistinguishable from a real failure to the
+      // frontend and triggers the local demo fallback. Your client
+      // hard-timeout is 55s and vercel.json allows 60s total, so
+      // there's plenty of room to give Groq more breathing space.
+      40000
     );
 
     if (!groqResponse.ok) {
