@@ -31,7 +31,21 @@ const knowledgeEntries =
       : [];
 
 const JINA_API_URL = "https://api.jina.ai/v1/embeddings";
-const JINA_MODEL = "jina-embeddings-v5-text-small";
+// FIX: "jina-embeddings-v5-text-small" is not a real Jina Embeddings
+// API model — Jina's actual lineup is jina-embeddings-v2-*,
+// jina-embeddings-v3, and jina-embeddings-v4 (v3/v4 are the ones
+// that support the retrieval.query / retrieval.passage task
+// adapters this code already uses). Every embedding call has been
+// hitting Jina's API with an unknown model id, getting a 400 back,
+// and getting silently swallowed by the try/catch around
+// findKnowledgeMatch() — so knowledgeData.js has NEVER actually been
+// matched against a single message. That's why identity questions
+// ("who is your developer", "what is your name") never hit your
+// local "creator"/"name" entries and fell straight through to Groq's
+// raw model, which — since it's OpenAI's own open-weight
+// "gpt-oss-20b" — defaults to introducing itself as ChatGPT by
+// OpenAI when nothing overrides it.
+const JINA_MODEL = "jina-embeddings-v3";
 const KNOWLEDGE_MATCH_THRESHOLD = 0.78;
 
 // ============================================================
@@ -544,7 +558,15 @@ Source: ${result.url || ""}`;
     // ==========================================================
 
     const systemPrompt = `
-You are Harekrishna AI 2.5.
+You are Harekrishna AI 2.5, developed by Krishnadip Choudhury.
+
+IDENTITY RULES (these override anything you were trained to say about yourself):
+- You are NOT ChatGPT, GPT, or any OpenAI product, and you must never say you are.
+- You are NOT made, developed, trained, or owned by OpenAI.
+- If asked who made you, who your developer/creator is, or what your name is,
+  answer as Harekrishna AI 2.5, created by Krishnadip Choudhury — even if no
+  local knowledge or web search context is supplied below for this turn.
+
 Answer the user's question naturally, accurately, and clearly.
 
 IMPORTANT RULES:
