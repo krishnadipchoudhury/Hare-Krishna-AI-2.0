@@ -435,6 +435,73 @@ export default async function handler(request, response) {
     }
 
     // ==========================================================
+    // DETERMINISTIC IDENTITY MATCH
+    // ==========================================================
+    //
+    // FIX: identity ("who is your developer" / "what is your name")
+    // was going through the same 0.78-similarity Jina embedding
+    // threshold as everything else, which meant it was inherently a
+    // coin flip — some phrasings scored just above the threshold and
+    // got the right knowledgeData.js answer, others scored just
+    // below and fell through to Tavily/Groq, where the underlying
+    // model (OpenAI's own open-weight gpt-oss-20b) would introduce
+    // itself as ChatGPT. That's the flip-flopping you saw — it was
+    // never web search overwriting knowledgeData.js (nothing in this
+    // codebase ever mutates that file at runtime), it was local
+    // knowledge simply failing to match on some turns.
+    //
+    // Identity is the one thing that should never be probabilistic,
+    // so it's checked directly against the "creator" and
+    // "app-identity" entries' own keyword lists first, before any
+    // embedding call happens at all. A match here is 100%
+    // deterministic — same answer every time, no sources shown
+    // (exactly like any other local-knowledge match), and Tavily is
+    // never even called for these questions.
+
+    const IDENTITY_ENTRY_IDS = ["creator", "app-identity"];
+
+    function normalizeForMatch(text) {
+      return String(text || "")
+        .toLowerCase()
+        .replace(/[^\w\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function findIdentityKeywordMatch(userMessage, entries) {
+      const normalizedMessage = normalizeForMatch(userMessage);
+
+      if (!normalizedMessage) {
+        return null;
+      }
+
+      for (const entry of entries) {
+        if (!IDENTITY_ENTRY_IDS.includes(entry.id)) continue;
+        if (!Array.isArray(entry.keywords)) continue;
+
+        for (const keyword of entry.keywords) {
+          const normalizedKeyword = normalizeForMatch(keyword);
+
+          // Skip single-word keywords like "name" — too generic to
+          // safely match as a substring against arbitrary messages
+          // ("my name is Raj" shouldn't trigger the identity answer).
+          if (!normalizedKeyword || !normalizedKeyword.includes(" ")) {
+            continue;
+          }
+
+          if (
+            normalizedMessage === normalizedKeyword ||
+            normalizedMessage.includes(normalizedKeyword)
+          ) {
+            return entry;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    // ==========================================================
     // START STREAMING RESPONSE
     // ==========================================================
 
@@ -445,31 +512,41 @@ export default async function handler(request, response) {
       "Transfer-Encoding": "chunked"
     });
 
-    // ==========================================================
-    // JINA SEMANTIC SEARCH
-    // ==========================================================
+    const identityEntry =
+      findIdentityKeywordMatch(message, knowledgeEntries);
 
-    let knowledgeMatch = null;
-    let usingLocalKnowledge = false;
+    let knowledgeMatch =
+      identityEntry ? { entry: identityEntry, similarity: 1 } : null;
 
-    try {
-      console.log("JINA SEARCH STARTED:", message);
+    let usingLocalKnowledge = !!knowledgeMatch;
 
-      knowledgeMatch = await findKnowledgeMatch(message, knowledgeEntries);
+    if (knowledgeMatch) {
+      console.log("IDENTITY KEYWORD MATCH:", knowledgeMatch.entry.id);
+    } else {
 
-      if (knowledgeMatch) {
-        usingLocalKnowledge = true;
+      // ==========================================================
+      // JINA SEMANTIC SEARCH
+      // ==========================================================
 
-        console.log("LOCAL KNOWLEDGE MATCH:", knowledgeMatch.similarity);
-      } else {
-        console.log("NO LOCAL KNOWLEDGE MATCH");
+      try {
+        console.log("JINA SEARCH STARTED:", message);
+
+        knowledgeMatch = await findKnowledgeMatch(message, knowledgeEntries);
+
+        if (knowledgeMatch) {
+          usingLocalKnowledge = true;
+
+          console.log("LOCAL KNOWLEDGE MATCH:", knowledgeMatch.similarity);
+        } else {
+          console.log("NO LOCAL KNOWLEDGE MATCH");
+        }
+
+      } catch (error) {
+        console.error("Jina semantic search failed:", error.message);
+
+        // Jina failure does not crash the chatbot — continue to Tavily.
+        knowledgeMatch = null;
       }
-
-    } catch (error) {
-      console.error("Jina semantic search failed:", error.message);
-
-      // Jina failure does not crash the chatbot — continue to Tavily.
-      knowledgeMatch = null;
     }
 
     // ==========================================================
