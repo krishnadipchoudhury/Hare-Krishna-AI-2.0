@@ -21,7 +21,7 @@
     <div class="auth-card">
 
       <div class="auth-logo" aria-hidden="true">
-        <span>✦</span>
+        <span>Рюд</span>
       </div>
 
       <h1 class="auth-title">Welcome to AI</h1>
@@ -265,7 +265,7 @@
             title="Settings"
             aria-label="Open settings">
 
-            ⚙
+            РџЎ
 
           </button>
 
@@ -390,7 +390,7 @@
           type="button"
           aria-label="Open menu">
 
-          ☰
+          Рў░
 
         </button>
 
@@ -401,7 +401,7 @@
             class="brand-mark"
             aria-hidden="true">
 
-            ✦
+            Рюд
 
           </div>
 
@@ -460,7 +460,7 @@
             title="Share current chat"
             aria-label="Share current chat">
 
-            ↗
+            РєЌ
 
           </button>
 
@@ -496,7 +496,7 @@
         </svg>
 
         <span>
-          Incognito chat — this conversation won't be saved
+          Incognito chat Рђћ this conversation won't be saved
         </span>
 
       </div>
@@ -518,7 +518,7 @@
             class="welcome-icon"
             aria-hidden="true">
 
-            ✦
+            Рюд
 
           </div>
 
@@ -606,7 +606,7 @@
             title="Send message"
             aria-label="Send message">
 
-            ↑
+            РєЉ
 
           </button>
 
@@ -652,7 +652,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -715,7 +715,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -773,7 +773,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -807,7 +807,7 @@
               </span>
 
               <span class="settings-item-arrow">
-                ›
+                Рђ║
               </span>
 
             </span>
@@ -857,7 +857,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -884,7 +884,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -911,7 +911,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -927,7 +927,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -943,7 +943,7 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
@@ -959,12 +959,24 @@
             </span>
 
             <span class="settings-item-arrow">
-              ›
+              Рђ║
             </span>
 
           </button>
 
         </div>
+
+
+        <!-- DELETE ACCOUNT -->
+
+        <button
+          class="settings-item danger-item delete-account-item"
+          id="deleteAccountBtn"
+          type="button">
+
+          Delete account
+
+        </button>
 
 
         <!-- SIGN OUT -->
@@ -1001,7 +1013,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -1036,7 +1048,7 @@
 
           </span>
 
-          <span class="theme-option-check" aria-hidden="true">✓</span>
+          <span class="theme-option-check" aria-hidden="true">РюЊ</span>
 
         </button>
 
@@ -1068,7 +1080,7 @@
             <span class="theme-option-title">Light mode</span>
           </span>
 
-          <span class="theme-option-check" aria-hidden="true">✓</span>
+          <span class="theme-option-check" aria-hidden="true">РюЊ</span>
 
         </button>
 
@@ -1092,7 +1104,7 @@
             <span class="theme-option-title">Dark mode</span>
           </span>
 
-          <span class="theme-option-check" aria-hidden="true">✓</span>
+          <span class="theme-option-check" aria-hidden="true">РюЊ</span>
 
         </button>
 
@@ -1119,7 +1131,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -1155,6 +1167,54 @@
 
 
   <!-- =====================================================
+       DELETE ACCOUNT CONFIRMATION
+       ===================================================== -->
+
+  <div
+    class="modal hidden"
+    id="deleteAccountConfirmModal">
+
+    <div class="modal-card confirm-card">
+
+      <h2>
+        Delete your account forever?
+      </h2>
+
+      <p>
+        This permanently deletes your account and everything tied to
+        it Рђћ every chat, your recently-deleted bin, your saved
+        memory, and your sign-in itself. This cannot be undone and
+        nothing can be recovered afterward.
+      </p>
+
+      <div class="confirm-actions">
+
+        <button
+          class="confirm-cancel-btn"
+          id="deleteAccountCancelBtn"
+          type="button">
+
+          Cancel
+
+        </button>
+
+        <button
+          class="confirm-danger-btn"
+          id="deleteAccountConfirmBtn"
+          type="button">
+
+          Delete my account
+
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
        DELETE ALL CHATS CONFIRMATION
        ===================================================== -->
 
@@ -1171,7 +1231,7 @@
       <p>
         Are you sure you want to delete all your chats? You can
         restore them later, or permanently delete them, from
-        Settings → Recently deleted.
+        Settings Рєњ Recently deleted.
       </p>
 
       <div class="confirm-actions">
@@ -1217,7 +1277,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -1258,7 +1318,7 @@
         type="button"
         aria-label="Close">
 
-        ×
+        ├Ќ
 
       </button>
 
@@ -1298,7 +1358,7 @@
           type="button"
           aria-label="Close">
 
-          ×
+          ├Ќ
 
         </button>
 
