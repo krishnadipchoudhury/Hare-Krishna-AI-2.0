@@ -964,7 +964,6 @@ button:disabled {
 /* =========================================================
    SEARCHING/THINKING STATUS ICON (globe)
    ========================================================= */
-
 .status-globe-icon {
   display: flex;
 
@@ -1404,6 +1403,12 @@ button:disabled {
   gap: 8px;
 
   margin-top: 8px;
+}
+
+/* Delete account sits directly above Sign out and uses the same
+   red as every other destructive action in Settings. */
+.settings-item.delete-account-item {
+  color: var(--danger);
 }
 
 .settings-toggle-row {
@@ -2995,7 +3000,6 @@ button:disabled {
 
   color: white;
 }
-
 
 /* =========================================================
    TYPING
