@@ -1193,91 +1193,9 @@ function openCustomerSupport() {
 }
 
 
-/* =========================================================
-   17e. LEGAL CONTENT (Terms / Privacy / License)
-   =========================================================
-   NOTE: This is placeholder text. Review and replace with
-   your own finalized Terms, Privacy Policy, and License
-   before publishing the app.
-   ========================================================= */
-
-const LEGAL_CONTENT = {
-
-  terms: {
-    title: "Terms & Conditions",
-    html:
-      "<h3>1. Acceptance of terms</h3>" +
-      "<p>By using this app, you agree to these terms. If you do not agree, please do not use the app.</p>" +
-      "<h3>2. Use of the service</h3>" +
-      "<p>You agree to use this app only for lawful purposes and not to misuse the AI responses or attempt to disrupt the service.</p>" +
-      "<h3>3. Account responsibility</h3>" +
-      "<p>You are responsible for keeping your login credentials secure and for all activity under your account.</p>" +
-      "<h3>4. Changes to these terms</h3>" +
-      "<p>These terms may be updated from time to time. Continued use of the app after changes means you accept the updated terms.</p>" +
-      "<p style='color:var(--muted);font-size:12px;margin-top:16px;'>This is placeholder text — replace with your reviewed Terms & Conditions before publishing.</p>"
-  },
-
-  privacy: {
-    title: "Privacy Policy",
-    html:
-      "<h3>Information we collect</h3>" +
-      "<p>When you sign in, we store your email address, display name, and profile photo (if provided) to identify your account.</p>" +
-      "<h3>Your chats</h3>" +
-      "<p>Chat messages are stored securely with your account so you can access them across sessions. Guest chats are stored only on your device.</p>" +
-      "<h3>Memory</h3>" +
-      "<p>Anything you save to Memory is stored with your account and used only to personalize your experience within this app.</p>" +
-      "<h3>Sharing</h3>" +
-      "<p>We do not sell your personal data. Chats shared via link are visible to anyone who has that link.</p>" +
-      "<p style='color:var(--muted);font-size:12px;margin-top:16px;'>This is placeholder text — replace with your reviewed Privacy Policy before publishing.</p>"
-  },
-
-  license: {
-    title: "License",
-    html:
-      "<h3>MIT License</h3>" +
-      "<p>Copyright (c) 2026 Krishnadip Choudhury</p>" +
-      "<p>Permission is hereby granted, free of charge, to any person obtaining a copy " +
-      "of this software and associated documentation files (the \"Software\"), to deal " +
-      "in the Software without restriction, including without limitation the rights " +
-      "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell " +
-      "copies of the Software, and to permit persons to whom the Software is " +
-      "furnished to do so, subject to the following conditions:</p>" +
-      "<p>The above copyright notice and this permission notice shall be included in all " +
-      "copies or substantial portions of the Software.</p>" +
-      "<p>THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR " +
-      "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, " +
-      "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE " +
-      "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER " +
-      "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, " +
-      "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE " +
-      "SOFTWARE.</p>" +
-      "<h3>Third-party services</h3>" +
-      "<p>This app uses Firebase (Google) for authentication and data storage, subject to Google's own terms of service.</p>"
-  }
-
-};
-
-function openLegalModal(key) {
-  const data = LEGAL_CONTENT[key];
-
-  if (
-    !data ||
-    !legalModal ||
-    !legalTitle ||
-    !legalContent
-  ) {
-    return;
-  }
-
-  legalTitle.textContent = data.title;
-  legalContent.innerHTML = data.html;
-
-  openModal(legalModal);
-}
-
 
 /* =========================================================
-   17f. MEMORY (guest = localStorage, account = Firestore)
+   17e. MEMORY (guest = localStorage, account = Firestore)
    ========================================================= */
 
 function loadMemoryLocal() {
@@ -1479,7 +1397,7 @@ function clearAllMemory() {
 
 
 /* =========================================================
-   17g. RECENTLY DELETED (BIN) — 14 day soft delete
+   17f. RECENTLY DELETED (BIN) — 14 day soft delete
    ========================================================= */
 
 function saveGuestDeletedChats() {
