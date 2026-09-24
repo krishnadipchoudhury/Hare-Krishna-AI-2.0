@@ -843,8 +843,35 @@ function solveFractionExpression(text) {
       "/"
     );
 
+  // FIX: parseFractionValue() below also accepts a bare integer
+  // (e.g. "1") as a valid "fraction" with denominator 1. Without
+  // this guard, plain arithmetic like "1+1" or "5*3" was matching
+  // here BEFORE it ever reached the plain arithmetic evaluator,
+  // so simple sums were getting the full fraction treatment —
+  // "Formula: a/b + c/d = ...", an LCM step, etc. — for something
+  // that should just be a one-line answer. A real fraction question
+  // always has a "/" in it somewhere (e.g. "1/2 + 3/4"), so bail out
+  // here when there isn't one and let it fall through to the plain
+  // arithmetic path instead.
+  if (!input.includes("/")) {
+    return null;
+  }
+
+  // A "fraction term" is a mixed number ("3 1/2"), a simple
+  // fraction ("1/2"), or a plain integer ("2") — tried in that
+  // order so a mixed number isn't mistaken for a bare fraction
+  // followed by leftover text.
+  const FRACTION_TERM =
+    "[+-]?\\d+\\s+\\d+\\/\\d+|[+-]?\\d+\\/\\d+|[+-]?\\d+";
+
   const match = input.match(
-    /^(.+?)\s*([+\-*/])\s*(.+)$/
+    new RegExp(
+      "^\\s*(" +
+        FRACTION_TERM +
+        ")\\s*([+\\-*/])\\s*(" +
+        FRACTION_TERM +
+        ")\\s*$"
+    )
   );
 
   if (!match) {
@@ -1062,7 +1089,7 @@ function solveFractionExpression(text) {
     expression:
       fractionToText(left) +
       " " +
-      operator +
+      opSymbol(operator) +
       " " +
       fractionToText(right),
     operator,
