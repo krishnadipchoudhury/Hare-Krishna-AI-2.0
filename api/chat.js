@@ -1,512 +1,926 @@
-// /api/chat.js
-//
-// Vercel Function — Node.js runtime.
-//
-// IMPORTANT: Node.js Functions on Vercel use the traditional
-// (request, response) signature — response.write()/response.end() —
-// NOT the Web-standard (request) => new Response(...) signature.
-// That Web API style only works on Edge Functions. Since Edge
-// Functions were deprecated by Vercel, this runs as a Node.js
-// Function, so it has to use response.write()/.end() to actually
-// send anything back. (An earlier version of this file used the
-// Edge-style API by mistake — every request would hang for the
-// full maxDuration with zero outgoing requests, because "return
-// new Response(...)" doesn't mean anything to the Node runtime;
-// nothing ever told the underlying connection a response was
-// ready, so it just sat open until Vercel force-killed it.)
-//
-// Handles every chat message that the client didn't already answer
-// from its own local memory:
-//   1. Tries the arithmetic solver (knowledge/math.js) first — pure
-//      math questions get a guaranteed-correct, instant, fully
-//      worked-out answer with no search or LLM call needed at all.
-//   2. Checks knowledge/knowledgeData.js — if the question matches
-//      an entry there, that answer is treated as authoritative
-//      ground truth and the web search is skipped entirely for this
-//      turn, so it can never be overridden or contradicted by a
-//      live search.
-//   3. Otherwise searches the web via Tavily (grounds the answer in
-//      current info).
-//   4. Sends the question + search results (or the knowledge/math
-//      facts) + short memory/history context to Groq, with
-//      streaming enabled.
-//   5. Re-streams the answer back to the browser as plain text,
-//      preceded by two JSON lines:
-//        - {"type":"status","searching":true|false}   sent first,
-//          before any slow work, so the UI can show "Searching the
-//          web" vs "Thinking" accurately.
-//        - {"type":"sources","sources":[...]}          sent once
-//          search — if any — has finished.
-//
-// Requires two environment variables set in Vercel:
-//   TAVILY_API_KEY
-//   GROQ_API_KEY
-// Both stay server-side only — never sent to the browser.
+// api/chat.js
 
-import { trySolveMath, explainMathSolution } from "../knowledge/math.js";
-import { knowledgeEntries } from "../knowledge/knowledgeData.js";
+import {
+  trySolveMath,
+  explainMathSolution
+} from "../knowledge/math.js";
 
-const SYSTEM_PROMPT =
-  "You are Hare Krishna AI, a helpful, friendly assistant.\n\n" +
+// knowledgeData.js exports a NAMED export
+// (export const knowledgeEntries = [...]), not a default export.
+// This reads whichever export style the file ends up using, so it
+// can't silently break again if knowledgeData.js is edited later.
+import * as knowledgeDataModule from "../knowledge/knowledgeData.js";
 
-  "MATCH YOUR ANSWER TO THE QUESTION — this is important:\n" +
-  "- Fill-in-the-blank question → fill in the blank(s), nothing more.\n" +
-  "- One-word question → answer in one word.\n" +
-  "- Very short-answer question → 1 short sentence.\n" +
-  "- Short-answer question → a few sentences.\n" +
-  "- Long-answer question → a full, detailed explanation.\n" +
-  "- Very long-answer / \"explain in detail\" question → thorough, " +
-  "well-organized, as long as it needs to be.\n" +
-  "Never pad a simple question with headers, tables, or extra " +
-  "sections it didn't ask for. A quick factual question deserves a " +
-  "quick factual answer, not an essay. Only use tables, bullet " +
-  "lists, or multiple headers when the content genuinely has " +
-  "multiple comparable items or steps worth structuring that way.\n" +
-  "EXCEPTION to the above: this length-matching rule is about how " +
-  "much you elaborate — it never means replying with a single bare " +
-  "word/name and nothing else. Every answer, even a short factual " +
-  "one, must be a complete, natural sentence (e.g. \"I was created " +
-  "by Krishnadip Choudhury.\", never just \"Krishnadip Choudhury\").\n\n" +
+const knowledgeEntries =
+  Array.isArray(knowledgeDataModule.default)
+    ? knowledgeDataModule.default
+    : Array.isArray(knowledgeDataModule.knowledgeEntries)
+      ? knowledgeDataModule.knowledgeEntries
+      : [];
 
-  "FORMATTING: reply in Markdown (use **bold**, *italic*, proper " +
-  "line breaks, lists, and tables) since it's rendered visually — " +
-  "never use raw HTML tags like <br>.\n\n" +
+// ============================================================
+// READ JSON BODY
+// ============================================================
 
-  "WEB SEARCH: when web search results are provided below, use them " +
-  "to give an accurate, current answer, and prefer them over your " +
-  "own prior knowledge for anything time-sensitive. If the results " +
-  "don't actually help answer the question, just answer normally " +
-  "from what you know. Never make up facts about the user that " +
-  "weren't given to you.";
+async function readJsonBody(request) {
+  if (request.body && typeof request.body === "object") {
+    return request.body;
+  }
 
-const GROQ_MODEL = "openai/gpt-oss-20b";
+  let body = "";
 
-// ---------------------------------------------------------
-// Node's request object is a raw stream, not pre-parsed — this
-// reads and JSON-parses the incoming POST body manually.
-// ---------------------------------------------------------
+  for await (const chunk of request) {
+    body += chunk.toString();
+  }
 
-function readJsonBody(request) {
-  return new Promise((resolve, reject) => {
-    let raw = "";
+  if (!body) {
+    return {};
+  }
 
-    request.on("data", chunk => {
-      raw += chunk;
-    });
-
-    request.on("end", () => {
-      try {
-        resolve(raw ? JSON.parse(raw) : {});
-      } catch (err) {
-        reject(err);
-      }
-    });
-
-    request.on("error", reject);
-  });
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new Error("Invalid JSON body");
+  }
 }
 
-// ---------------------------------------------------------
-// Neither external API call had a timeout before — if Tavily
-// or Groq ever hangs (no response, no error, nothing), the
-// function just waits until Vercel force-kills the whole
-// thing at maxDuration, producing an opaque 504 with zero
-// diagnostic info. This wraps fetch with an explicit budget
-// so a hang fails fast with a clear, catchable error instead.
-// ---------------------------------------------------------
+// ============================================================
+// FETCH WITH TIMEOUT
+// ============================================================
 
-async function fetchWithTimeout(url, options, timeoutMs) {
+async function fetchWithTimeout(
+  url,
+  options = {},
+  timeoutMs = 15000
+) {
   const controller = new AbortController();
 
-  const timer = setTimeout(
-    () => controller.abort(),
-    timeoutMs
-  );
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
   try {
     return await fetch(url, {
       ...options,
       signal: controller.signal
     });
-
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timeout);
   }
 }
 
-// ---------------------------------------------------------
-// Local knowledge base — see /knowledge/knowledgeData.js.
-// Any matching entry here is treated as ground truth and the
-// web search is skipped for that turn, so this data can never
-// get overridden or contradicted by a live search result.
-// ---------------------------------------------------------
+// ============================================================
+// LOCAL KNOWLEDGE MATCHING — PASS 1: DETERMINISTIC KEYWORDS
+// ============================================================
+//
+// This runs BEFORE Jina and costs nothing (no network call, pure
+// string matching), so it's always tried first. It exists for two
+// reasons:
+//
+// 1. RELIABILITY. Identity questions ("who is your developer") and
+//    common greetings ("hi", "gm", "good morning") must always get
+//    the exact local answer — never a coin flip depending on
+//    whether an external embeddings API happens to be up. If this
+//    pass finds a match, Jina isn't even called for that message.
+// 2. SPEED/COST. A literal keyword hit answers instantly and for
+//    free; there's no reason to pay for a Jina embedding call when
+//    the message already contains one of the entry's own keyword
+//    phrases word-for-word.
+//
+// Anything this pass doesn't catch (a paraphrase, a differently
+// worded version of a question) falls through to the Jina semantic
+// search pass below. Matching rules:
+//
+// 1. An exact match (message text equals a keyword, after
+//    lowercasing/punctuation-stripping) always matches.
+// 2. A single-word keyword ("hi", "js", "name", "help", "gm") only
+//    matches when the ENTIRE message is that one word — a single
+//    word is too generic to safely match as a substring of a
+//    longer, unrelated message.
+// 3. A multi-word keyword ("who is your developer", "help me")
+//    matches as a whole phrase inside the message, but only when
+//    the message is close in length to the keyword itself. This
+//    stops a short canned phrase like "help me" from hijacking a
+//    longer, genuinely different request such as "help me write a
+//    poem about the ocean" — that should go to Groq/web search,
+//    not the canned general-help answer.
+// 4. When more than one entry matches, the entry whose matched
+//    keyword has the most words wins (the more specific match).
 
-function findKnowledgeMatches(message, entries) {
-  const lower = message.toLowerCase();
+function normalizeForMatch(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  return entries.filter(
-    entry =>
-      entry &&
-      Array.isArray(entry.keywords) &&
-      typeof entry.answer === "string" &&
-      entry.keywords.some(
-        keyword =>
-          typeof keyword === "string" &&
-          keyword.trim() &&
-          lower.includes(keyword.trim().toLowerCase())
-      )
+function wordCount(text) {
+  return text ? text.split(" ").filter(Boolean).length : 0;
+}
+
+// How many "extra" words a message may have beyond the matched
+// keyword's own length and still count as "basically just this
+// phrase" (covers small filler like "please", "can you", "just").
+const MATCH_LENGTH_SLACK = 3;
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findKeywordMatch(message, entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  const normalizedMessage = normalizeForMatch(message);
+
+  if (!normalizedMessage) {
+    return null;
+  }
+
+  const messageWordCount = wordCount(normalizedMessage);
+
+  let best = null;
+
+  for (const entry of entries) {
+    if (!Array.isArray(entry.keywords)) continue;
+
+    for (const keyword of entry.keywords) {
+      const normalizedKeyword = normalizeForMatch(keyword);
+
+      if (!normalizedKeyword) continue;
+
+      const keywordWordCount = wordCount(normalizedKeyword);
+
+      let isMatch = false;
+
+      if (normalizedMessage === normalizedKeyword) {
+        isMatch = true;
+      } else if (keywordWordCount > 1) {
+        const pattern = new RegExp(
+          "\\b" + escapeRegExp(normalizedKeyword) + "\\b"
+        );
+
+        if (
+          pattern.test(normalizedMessage) &&
+          messageWordCount <= keywordWordCount + MATCH_LENGTH_SLACK
+        ) {
+          isMatch = true;
+        }
+      }
+      // Single-word keywords: only the exact-match branch above
+      // can match them — no substring fallback (see rule 2 above).
+
+      if (!isMatch) continue;
+
+      if (!best || keywordWordCount > best.keywordWordCount) {
+        best = {
+          entry,
+          matchedKeyword: normalizedKeyword,
+          keywordWordCount
+        };
+      }
+    }
+  }
+
+  return best;
+}
+
+// ============================================================
+// LOCAL KNOWLEDGE MATCHING — PASS 2: JINA SEMANTIC SEARCH
+// ============================================================
+//
+// Restored as the NLU layer for questions that mean the same thing
+// as a knowledgeData.js entry but don't literally contain one of
+// its keyword phrases (paraphrases, typos, differently-worded
+// questions). Only reached when Pass 1 above finds nothing.
+//
+// FIX: this used to be configured with model id
+// "jina-embeddings-v5-text-small", which is not a real Jina
+// Embeddings model — Jina's actual lineup is jina-embeddings-v2-*,
+// jina-embeddings-v3, and jina-embeddings-v4. Every call was
+// hitting Jina's API with an unknown model id, getting a 400 back,
+// and being silently swallowed by the try/catch around this
+// function — so this pass was never actually working. Fixed to use
+// the real "jina-embeddings-v3" model, which supports the
+// retrieval.query / retrieval.passage task adapters used below.
+//
+// The knowledge base only changes on deploy, so its document
+// embeddings are computed ONCE per warm server instance and cached
+// in module scope. Every request after the first reuses the cached
+// vectors — only the (tiny) per-message query embedding is
+// computed fresh each time.
+
+const JINA_API_URL = "https://api.jina.ai/v1/embeddings";
+const JINA_MODEL = "jina-embeddings-v3";
+const KNOWLEDGE_MATCH_THRESHOLD = 0.78;
+
+function buildKnowledgeText(entry) {
+  const question =
+    typeof entry.question === "string"
+      ? entry.question
+      : "";
+
+  const keywords =
+    Array.isArray(entry.keywords)
+      ? entry.keywords.join(", ")
+      : "";
+
+  const answer =
+    typeof entry.answer === "string"
+      ? entry.answer
+      : "";
+
+  return [question, keywords, answer]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function cosineSimilarity(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+    return 0;
+  }
+
+  const length = Math.min(a.length, b.length);
+
+  if (length === 0) {
+    return 0;
+  }
+
+  let dot = 0;
+  let magnitudeA = 0;
+  let magnitudeB = 0;
+
+  for (let i = 0; i < length; i++) {
+    const x = Number(a[i]) || 0;
+    const y = Number(b[i]) || 0;
+
+    dot += x * y;
+    magnitudeA += x * x;
+    magnitudeB += y * y;
+  }
+
+  if (magnitudeA === 0 || magnitudeB === 0) {
+    return 0;
+  }
+
+  return (
+    dot /
+    (Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB))
   );
 }
+
+async function getJinaEmbeddings(input, task) {
+  if (!process.env.JINA_API_KEY) {
+    throw new Error("JINA_API_KEY is not configured");
+  }
+
+  const response = await fetchWithTimeout(
+    JINA_API_URL,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.JINA_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: JINA_MODEL,
+        task,
+        dimensions: 512,
+        input
+      })
+    },
+    15000
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Jina API error ${response.status}: ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  if (!data || !Array.isArray(data.data)) {
+    throw new Error("Invalid response from Jina");
+  }
+
+  return data.data.map(item => item.embedding);
+}
+
+let cachedDocumentEmbeddings = null;
+let cachedDocumentEntries = null;
+
+async function getDocumentEmbeddings(entries) {
+  if (
+    cachedDocumentEmbeddings &&
+    cachedDocumentEntries === entries
+  ) {
+    return cachedDocumentEmbeddings;
+  }
+
+  const documents =
+    entries
+      .map(buildKnowledgeText)
+      .filter(Boolean);
+
+  if (documents.length === 0) {
+    cachedDocumentEmbeddings = [];
+    cachedDocumentEntries = entries;
+    return cachedDocumentEmbeddings;
+  }
+
+  const embeddings =
+    await getJinaEmbeddings(documents, "retrieval.passage");
+
+  cachedDocumentEmbeddings = embeddings;
+  cachedDocumentEntries = entries;
+
+  return embeddings;
+}
+
+async function findSemanticMatch(message, entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return null;
+  }
+
+  const documentEmbeddings =
+    await getDocumentEmbeddings(entries);
+
+  if (documentEmbeddings.length === 0) {
+    return null;
+  }
+
+  // STEP 1 — embed the user's question (the only embedding call
+  // that still has to happen fresh on every request)
+  const [queryEmbedding] =
+    await getJinaEmbeddings([message], "retrieval.query");
+
+  // STEP 2 — find highest similarity against the cached document
+  // embeddings
+  let bestMatch = null;
+
+  for (let i = 0; i < documentEmbeddings.length; i++) {
+    const similarity = cosineSimilarity(
+      queryEmbedding,
+      documentEmbeddings[i]
+    );
+
+    if (!bestMatch || similarity > bestMatch.similarity) {
+      bestMatch = {
+        entry: entries[i],
+        similarity
+      };
+    }
+  }
+
+  // STEP 3 — apply threshold
+  if (!bestMatch || bestMatch.similarity < KNOWLEDGE_MATCH_THRESHOLD) {
+    return null;
+  }
+
+  return bestMatch;
+}
+
+// ============================================================
+// LOCAL KNOWLEDGE MATCHING — COMBINED ENTRY POINT
+// ============================================================
+//
+// The pattern this app follows for every message:
+//   1. Check knowledgeData.js first — instantly via keywords, then
+//      (only if that finds nothing) via Jina's semantic search.
+//   2. Only if NEITHER local method finds an answer, fall back to
+//      a real web search (Tavily) — Jina is never involved in that
+//      step, it is purely the knowledge-base matcher.
+
+async function resolveKnowledgeMatch(message, entries) {
+  const keywordMatch = findKeywordMatch(message, entries);
+
+  if (keywordMatch) {
+    return {
+      entry: keywordMatch.entry,
+      method: "keyword",
+      detail: keywordMatch.matchedKeyword
+    };
+  }
+
+  try {
+    const semanticMatch = await findSemanticMatch(message, entries);
+
+    if (semanticMatch) {
+      return {
+        entry: semanticMatch.entry,
+        method: "semantic",
+        detail: semanticMatch.similarity.toFixed(4)
+      };
+    }
+  } catch (error) {
+    // Jina failure (missing key, network error, bad response) does
+    // not crash the chatbot — it just means this message falls
+    // through to web search instead, exactly like a genuine "no
+    // local knowledge match".
+    console.error("Jina semantic search failed:", error.message);
+  }
+
+  return null;
+}
+
+// ============================================================
+// TAVILY WEB SEARCH
+// ============================================================
+
+async function searchWeb(message) {
+  if (!process.env.TAVILY_API_KEY) {
+    throw new Error("TAVILY_API_KEY is not configured");
+  }
+
+  console.log("WEB SEARCH STARTED:", message);
+
+  const response = await fetchWithTimeout(
+    "https://api.tavily.com/search",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        api_key: process.env.TAVILY_API_KEY,
+        query: message,
+        max_results: 5,
+        search_depth: "basic"
+      })
+    },
+    10000
+  );
+
+  console.log("TAVILY STATUS:", response.status);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+
+    throw new Error(
+      `Tavily API error ${response.status}: ${errorText}`
+    );
+  }
+
+  const data = await response.json();
+
+  const results =
+    Array.isArray(data.results) ? data.results : [];
+
+  const sources =
+    results.map(result => ({
+      title: result.title || result.url,
+      url: result.url
+    }));
+
+  return { results, sources };
+}
+
+// ============================================================
+// MAIN API HANDLER
+// ============================================================
 
 export default async function handler(request, response) {
 
   if (request.method !== "POST") {
-    response.writeHead(405, { "Content-Type": "text/plain" });
-    response.end("Method not allowed");
+    response.status(405).json({
+      error: "Method not allowed"
+    });
     return;
   }
 
-  let body;
-
-  try {
-    body = await readJsonBody(request);
-  } catch {
-    response.writeHead(400, { "Content-Type": "text/plain" });
-    response.end("Invalid JSON body");
-    return;
-  }
-
-  const message =
-    body && typeof body.message === "string"
-      ? body.message.trim()
-      : "";
-
-  if (!message) {
-    response.writeHead(400, { "Content-Type": "text/plain" });
-    response.end("Missing 'message'");
-    return;
-  }
-
-  // Recent conversation turns, trimmed to keep the prompt small.
-  // Expected shape: [{ role: "user" | "assistant", content: "..." }, ...]
-  const history =
-    Array.isArray(body.history)
-      ? body.history
-          .filter(
-            m =>
-              m &&
-              (m.role === "user" || m.role === "assistant") &&
-              typeof m.content === "string"
-          )
-          .slice(-10)
-      : [];
-
-  // Facts the app already knows about the user (from Settings → Memory
-  // and/or past chat messages) — see getKnownFacts() in app.js.
-  const facts =
-    body.facts && typeof body.facts === "object" ? body.facts : null;
-
-  // If the client disconnects (closes the tab, navigates away),
-  // stop doing work for a response nobody will see.
   let clientDisconnected = false;
 
   request.on("close", () => {
     clientDisconnected = true;
   });
 
-  // ---------------------------------------------------------
-  // 0. Pure arithmetic — answered instantly, no search or LLM
-  //    call at all, guaranteed correct.
-  // ---------------------------------------------------------
+  try {
 
-  const mathSolved = trySolveMath(message);
+    // ==========================================================
+    // READ REQUEST
+    // ==========================================================
 
-  if (mathSolved) {
+    const body = await readJsonBody(request);
+
+    const message =
+      typeof body.message === "string"
+        ? body.message.trim()
+        : "";
+
+    const history =
+      Array.isArray(body.history)
+        ? body.history
+            .filter(item =>
+              item &&
+              (item.role === "user" || item.role === "assistant") &&
+              typeof item.content === "string"
+            )
+            .slice(-10)
+        : [];
+
+    const facts =
+      body.facts && typeof body.facts === "object"
+        ? body.facts
+        : {};
+
+    if (!message) {
+      response.status(400).json({
+        error: "Message is required"
+      });
+      return;
+    }
+
+    // ==========================================================
+    // MATH
+    // ==========================================================
+
+    const mathSolved = trySolveMath(message);
+
+    if (mathSolved !== null) {
+      response.writeHead(200, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive"
+      });
+
+      response.write(
+        JSON.stringify({ type: "status", searching: false }) + "\n"
+      );
+
+      response.write(
+        JSON.stringify({ type: "sources", sources: [] }) + "\n"
+      );
+
+      response.write(explainMathSolution(mathSolved));
+
+      response.end();
+      return;
+    }
+
+    // ==========================================================
+    // START STREAMING RESPONSE
+    // ==========================================================
+
     response.writeHead(200, {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache"
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Transfer-Encoding": "chunked"
     });
 
-    response.write(
-      JSON.stringify({ type: "status", searching: false }) + "\n"
-    );
+    // ==========================================================
+    // LOCAL KNOWLEDGE MATCH — checked FIRST, before any web search
+    // (keywords, then Jina semantic search — see comments above)
+    // ==========================================================
 
-    response.write(
-      JSON.stringify({ type: "sources", sources: [] }) + "\n"
-    );
+    const knowledgeMatch =
+      await resolveKnowledgeMatch(message, knowledgeEntries);
 
-    response.write(explainMathSolution(mathSolved));
+    const usingLocalKnowledge = !!knowledgeMatch;
 
-    response.end();
-    return;
-  }
-
-  // Decided synchronously, before any network call, so the
-  // "searching vs thinking" status can be sent to the client
-  // immediately once the response opens.
-  const knowledgeMatches = findKnowledgeMatches(message, knowledgeEntries);
-  const usingLocalKnowledge = knowledgeMatches.length > 0;
-
-  response.writeHead(200, {
-    "Content-Type": "text/plain; charset=utf-8",
-    "Cache-Control": "no-cache"
-  });
-
-  // ---------------------------------------------------
-  // 1. Status line FIRST — before any slow work — so the
-  //    UI can show the right loading label right away.
-  // ---------------------------------------------------
-
-  response.write(
-    JSON.stringify({
-      type: "status",
-      searching: !usingLocalKnowledge
-    }) + "\n"
-  );
-
-  // ---------------------------------------------------
-  // 2. Web search (Tavily) — skipped entirely when the
-  //    question was already answered by the knowledge base.
-  // ---------------------------------------------------
-
-  let sources = [];
-  let searchContext = "";
-
-  if (!usingLocalKnowledge && !clientDisconnected) {
-    try {
-      const tavilyRes = await fetchWithTimeout(
-        "https://api.tavily.com/search",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            api_key: process.env.TAVILY_API_KEY,
-            query: message,
-            max_results: 5,
-            search_depth: "basic"
-          })
-        },
-        10000
+    if (knowledgeMatch) {
+      console.log(
+        "LOCAL KNOWLEDGE MATCH:",
+        knowledgeMatch.entry.id,
+        "via " + knowledgeMatch.method,
+        "(" + knowledgeMatch.detail + ")"
       );
-
-      if (tavilyRes.ok) {
-        const data = await tavilyRes.json();
-        const results =
-          Array.isArray(data.results) ? data.results : [];
-
-        sources = results.map(r => ({
-          title: r.title || r.url,
-          url: r.url
-        }));
-
-        searchContext = results
-          .map(
-            (r, i) =>
-              `[${i + 1}] ${r.title}\n${r.content}\nSource: ${r.url}`
-          )
-          .join("\n\n");
-
-      } else {
-        console.error(
-          "Tavily returned non-OK status:",
-          tavilyRes.status,
-          await tavilyRes.text().catch(() => "")
-        );
-      }
-    } catch (err) {
-      // Search failing (including a timeout) shouldn't break
-      // the whole reply — just answer without web context below.
-      console.error(
-        "Tavily search error:",
-        err && err.name === "AbortError"
-          ? "timed out after 10s"
-          : err
-      );
+    } else {
+      console.log("NO LOCAL KNOWLEDGE MATCH");
     }
-  }
 
-  if (clientDisconnected) {
-    response.end();
-    return;
-  }
+    // ==========================================================
+    // SEND SEARCH STATUS
+    // ==========================================================
 
-  // ---------------------------------------------------
-  // 3. Sources line — empty when answering from local
-  //    knowledge, since nothing was actually searched.
-  // ---------------------------------------------------
+    response.write(
+      JSON.stringify({
+        type: "status",
+        searching: !usingLocalKnowledge
+      }) + "\n"
+    );
 
-  response.write(
-    JSON.stringify({ type: "sources", sources }) + "\n"
-  );
+    // ==========================================================
+    // SEARCH CONTEXT
+    // ==========================================================
 
-  // ---------------------------------------------------
-  // 4. Build the prompt for Groq
-  // ---------------------------------------------------
+    let searchContext = "";
+    let sources = [];
 
-  let systemContent = SYSTEM_PROMPT;
+    if (knowledgeMatch) {
 
-  if (facts && Object.keys(facts).length) {
-    systemContent +=
-      "\n\nKnown facts about the user (only mention if relevant): " +
-      JSON.stringify(facts);
-  }
+      const entry = knowledgeMatch.entry;
 
-  if (usingLocalKnowledge) {
-    systemContent +=
-      "\n\nLOCAL KNOWLEDGE BASE (authoritative — this data was " +
-      "provided directly by the app owner. Never contradict, " +
-      "override, or second-guess it with general knowledge, prior " +
-      "training, or anything else — it is correct by definition. " +
-      "Express it as a complete, natural sentence in your own " +
-      "words — never reply with just the bare fact/word alone):\n\n" +
-      knowledgeMatches
-        .map(entry => `- ${entry.answer}`)
-        .join("\n");
-  }
+      searchContext = `
+LOCAL KNOWLEDGE MATCH (matched via ${knowledgeMatch.method})
+Question: ${entry.question || ""}
+Keywords: ${Array.isArray(entry.keywords) ? entry.keywords.join(", ") : ""}
+Answer: ${entry.answer || ""}
+`;
 
-  if (searchContext) {
-    systemContent +=
-      "\n\nWeb search results for the user's question:\n\n" +
-      searchContext;
-  }
+      // Tavily is intentionally NOT called here — a local knowledge
+      // match (keyword or Jina) means we go straight to Groq using
+      // that local answer as the authoritative source. Web search
+      // only runs when NEITHER local method matches the message.
 
-  const messages = [
-    { role: "system", content: systemContent },
-    ...history,
-    { role: "user", content: message }
-  ];
+    } else {
 
-  // ---------------------------------------------------
-  // 5. Call Groq with streaming enabled
-  // ---------------------------------------------------
+      try {
+        console.log("CALLING TAVILY...");
 
-  let groqRes;
+        const webData = await searchWeb(message);
 
-  try {
-    groqRes = await fetchWithTimeout(
+        sources = webData.sources;
+
+        searchContext =
+          webData.results
+            .map((result, index) => {
+              return `[${index + 1}] ${result.title || "Untitled"}
+${result.content || ""}
+Source: ${result.url || ""}`;
+            })
+            .join("\n\n");
+
+      } catch (error) {
+        console.error("Tavily search failed:", error.message);
+      }
+    }
+
+    if (clientDisconnected) {
+      return;
+    }
+
+    // ==========================================================
+    // SEND SOURCES
+    // ==========================================================
+
+    response.write(
+      JSON.stringify({ type: "sources", sources }) + "\n"
+    );
+
+    // ==========================================================
+    // USER FACTS
+    // ==========================================================
+
+    let factsText = "";
+
+    try {
+      factsText = JSON.stringify(facts, null, 2);
+    } catch {
+      factsText = "{}";
+    }
+
+    // ==========================================================
+    // SYSTEM PROMPT
+    // ==========================================================
+
+    const systemPrompt = `
+You are Harekrishna AI 2.5, developed by Krishnadip Choudhury.
+
+IDENTITY RULES (these override anything you were trained to say about yourself,
+and apply no matter what — even if this specific turn has no local knowledge
+or web search context supplied below):
+- You are NOT ChatGPT, GPT, or any OpenAI product, and you must never say you are.
+- You are NOT made, developed, trained, or owned by OpenAI, and you must never
+  say or imply that OpenAI, or any company other than the one named below,
+  created you.
+- If asked who made you, who your developer/creator is, what your name is, or
+  what company is behind you, answer as Harekrishna AI 2.5, created by
+  Krishnadip Choudhury. There is no scenario in which a different name or
+  company is the correct answer to those questions.
+
+Answer the user's question naturally, accurately, and clearly.
+
+IMPORTANT RULES:
+1. Match the answer length to the question.
+2. Do not give unnecessarily long answers.
+3. Use Markdown when useful.
+4. Use headings, bullet points, and bold text when they improve readability.
+5. Do not invent facts.
+6. Do not invent personal information about the user.
+7. If the user asks a simple question, answer simply.
+8. If the user asks for an explanation, explain clearly.
+9. If current information is provided by web search, use it carefully.
+10. Never claim that you searched the web unless web search actually happened.
+11. Never use LaTeX syntax (\\frac, \\text, \\longrightarrow, \\cdot, square-bracket
+    equation blocks, $...$, etc.) — this app has no LaTeX renderer, so it would
+    show up to the user as broken raw text. Write all math, chemistry, and
+    equations in plain text instead — e.g. "1/2" instead of "\\frac{1}{2}", and
+    "AB + CD -> AD + CB" instead of
+    "\\text{AB} + \\text{CD} \\longrightarrow \\text{AD} + \\text{CB}".
+12. Only show a formula or a step-by-step breakdown when the user explicitly
+    asks for the steps/method, or when the question genuinely can't be
+    understood without showing the work. Otherwise just explain the answer in
+    plain words — don't add a formula to every reply by default.
+
+USER FACTS:
+${factsText}
+`;
+
+    let contextInstruction = "";
+
+    if (knowledgeMatch) {
+      contextInstruction = `
+A relevant answer was found in the local knowledge base.
+Use this local knowledge as the authoritative source for this question.
+You may rewrite or explain the answer naturally, but do not contradict
+the supplied local knowledge.
+
+LOCAL KNOWLEDGE:
+${searchContext}
+`;
+
+    } else if (searchContext) {
+      contextInstruction = `
+WEB SEARCH RESULTS:
+Use these results when they are relevant. Prefer the information in
+the results for current or time-sensitive questions. Do not claim
+that you searched the web unless these web search results were
+actually obtained.
+
+${searchContext}
+`;
+
+    } else {
+      contextInstruction = `
+No local knowledge match or web-search context was found.
+Answer using your general knowledge. If you are uncertain, say so
+instead of inventing information.
+`;
+    }
+
+    // ==========================================================
+    // GROQ MESSAGES
+    // ==========================================================
+
+    const messages = [
+      {
+        role: "system",
+        content: systemPrompt + "\n\n" + contextInstruction
+      },
+      ...history,
+      {
+        role: "user",
+        content: message
+      }
+    ];
+
+    // ==========================================================
+    // GROQ API KEY
+    // ==========================================================
+
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
+    }
+
+    // ==========================================================
+    // GROQ STREAMING
+    // ==========================================================
+
+    const groqResponse = await fetchWithTimeout(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`
+          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model: "openai/gpt-oss-20b",
           messages,
           stream: true,
           temperature: 0.7
         })
       },
-      15000
+      // 15s was too tight — a cold or briefly slow Groq response
+      // would abort and throw before any tokens streamed back,
+      // indistinguishable from a real failure to the frontend. The
+      // client hard-timeout is 55s and vercel.json allows 60s total,
+      // so there's room to give Groq more breathing space.
+      40000
     );
-  } catch (err) {
-    console.error(
-      "Groq fetch error:",
-      err && err.name === "AbortError"
-        ? "timed out after 15s"
-        : err
-    );
-  }
 
-  if (!groqRes || !groqRes.ok || !groqRes.body) {
-    if (groqRes) {
-      const errorText = await groqRes.text().catch(() => "");
-      console.error(
-        "Groq request failed:",
-        groqRes.status,
-        errorText
+    if (!groqResponse.ok) {
+      const errorText = await groqResponse.text();
+
+      throw new Error(
+        `Groq API error ${groqResponse.status}: ${errorText}`
       );
     }
 
-    // Headers are already committed once the response is open,
-    // so a failure here has to be sent as plain answer text
-    // rather than an HTTP error status.
-    response.write(
-      "Sorry, I couldn't generate a response just now. Please try again."
-    );
-
-    response.end();
-    return;
-  }
-
-  // ---------------------------------------------------
-  // 6. Relay Groq's SSE stream as plain text chunks.
-  // ---------------------------------------------------
-
-  const reader = groqRes.body.getReader();
-  const decoder = new TextDecoder();
-
-  let buffer = "";
-
-  // If the connection to Groq succeeded but then the stream
-  // goes silent mid-way (never sends [DONE], never errors),
-  // this breaks the loop after 20s of no new data instead of
-  // hanging until Vercel force-kills the whole function.
-  const STREAM_STALL_MS = 20000;
-
-  while (true) {
-    if (clientDisconnected) break;
-
-    let readResult;
-
-    try {
-      readResult = await Promise.race([
-        reader.read(),
-        new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error("STREAM_STALLED")),
-            STREAM_STALL_MS
-          )
-        )
-      ]);
-
-    } catch (stallErr) {
-      console.error(
-        "Groq stream stalled — no data for",
-        STREAM_STALL_MS / 1000,
-        "seconds, ending stream early."
-      );
-
-      break;
+    if (!groqResponse.body) {
+      throw new Error("Groq returned no response body");
     }
 
-    const { done, value } = readResult;
+    // ==========================================================
+    // READ GROQ SSE STREAM
+    // ==========================================================
 
-    if (done) break;
+    const reader = groqResponse.body.getReader();
+    const decoder = new TextDecoder();
 
-    buffer += decoder.decode(value, { stream: true });
+    let buffer = "";
 
-    const lines = buffer.split("\n");
+    const STREAM_STALL_MS = 20000;
 
-    // Last entry may be an incomplete line — keep it for next read.
-    buffer = lines.pop() || "";
+    while (true) {
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+      if (clientDisconnected) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignore — connection already gone
+        }
+        return;
+      }
 
-      if (!trimmed.startsWith("data:")) continue;
-
-      const payload = trimmed.slice(5).trim();
-
-      if (!payload || payload === "[DONE]") continue;
+      let readResult;
 
       try {
-        const json = JSON.parse(payload);
-        const delta =
-          json.choices &&
-          json.choices[0] &&
-          json.choices[0].delta &&
-          json.choices[0].delta.content;
+        readResult = await Promise.race([
+          reader.read(),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Groq stream stalled")),
+              STREAM_STALL_MS
+            )
+          )
+        ]);
 
-        if (delta) {
-          response.write(delta);
+      } catch (stallError) {
+        console.error(
+          "Groq stream stalled — no data for",
+          STREAM_STALL_MS / 1000,
+          "seconds, ending stream early."
+        );
+        break;
+      }
+
+      const { value, done } = readResult;
+
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split("\n");
+
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+
+        if (!trimmed.startsWith("data:")) continue;
+
+        const payload = trimmed.slice(5).trim();
+
+        if (!payload || payload === "[DONE]") continue;
+
+        try {
+          const json = JSON.parse(payload);
+
+          const delta =
+            json.choices &&
+            json.choices[0] &&
+            json.choices[0].delta &&
+            json.choices[0].delta.content;
+
+          if (delta) {
+            response.write(delta);
+          }
+        } catch {
+          // ignore malformed SSE chunk, keep streaming
         }
-      } catch {
-        // Ignore any malformed SSE chunk and keep streaming.
       }
     }
-  }
 
-  response.end();
+    response.end();
+
+  } catch (error) {
+
+    console.error("Chat handler error:", error);
+
+    if (!response.headersSent) {
+      response.status(500).json({
+        error: error.message || "Internal server error"
+      });
+      return;
+    }
+
+    // Headers already sent (mid-stream) — the only way left to
+    // signal failure is to write it as plain text and close.
+    try {
+      response.write(
+        "\n\nSorry, something went wrong while generating the response."
+      );
+    } catch {
+      // ignore — connection may already be closed
+    }
+
+    response.end();
+  }
 }
