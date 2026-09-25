@@ -713,6 +713,10 @@ IMPORTANT RULES:
     equations in plain text instead — e.g. "1/2" instead of "\\frac{1}{2}", and
     "AB + CD -> AD + CB" instead of
     "\\text{AB} + \\text{CD} \\longrightarrow \\text{AD} + \\text{CB}".
+    This rule applies even if the user explicitly asks for LaTeX, a LaTeX
+    fraction, a formula "in LaTeX", or similar — still answer using the same
+    plain-text math notation, and briefly explain that this app can't render
+    LaTeX rather than outputting raw LaTeX syntax.
 12. Only show a formula or a step-by-step breakdown when the user explicitly
     asks for the steps/method, or when the question genuinely can't be
     understood without showing the work. Otherwise just explain the answer in
