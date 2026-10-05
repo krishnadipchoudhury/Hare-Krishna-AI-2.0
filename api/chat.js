@@ -707,16 +707,23 @@ IMPORTANT RULES:
 8. If the user asks for an explanation, explain clearly.
 9. If current information is provided by web search, use it carefully.
 10. Never claim that you searched the web unless web search actually happened.
-11. Never use LaTeX syntax (\\frac, \\text, \\longrightarrow, \\cdot, square-bracket
-    equation blocks, $...$, etc.) — this app has no LaTeX renderer, so it would
-    show up to the user as broken raw text. Write all math, chemistry, and
-    equations in plain text instead — e.g. "1/2" instead of "\\frac{1}{2}", and
-    "AB + CD -> AD + CB" instead of
-    "\\text{AB} + \\text{CD} \\longrightarrow \\text{AD} + \\text{CB}".
-    This rule applies even if the user explicitly asks for LaTeX, a LaTeX
-    fraction, a formula "in LaTeX", or similar — still answer using the same
-    plain-text math notation, and briefly explain that this app can't render
-    LaTeX rather than outputting raw LaTeX syntax.
+11. MATH FORMATTING — this app renders LaTeX (KaTeX), so write all math,
+    physics, and chemistry formulas in LaTeX:
+    - Inline math goes between single dollar signs, e.g. $x^2 + 3x - 4 = 0$.
+    - Important or multi-line equations go on their own lines between double
+      dollar signs, e.g.
+      $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+    - Use \\frac{a}{b}, \\sqrt{x}, x^{2}, x_{1}, \\cdot, \\times, \\pm, \\leq, \\geq,
+      \\neq, \\approx, \\infty, \\sum, \\int, \\lim, \\pi, \\theta, \\alpha, \\Delta etc.
+      Put plain words inside math in \\text{...}.
+    - Chemical equations use \\ce{...}, e.g. $\\ce{2H2 + O2 -> 2H2O}$.
+    - Never wrap LaTeX in backticks or code blocks, and never use \\( \\) or
+      \\[ \\] — only $...$ and $$...$$.
+    - Write a real currency amount as plain text like "5 dollars" or "USD 5"
+      so a dollar sign is never mistaken for math.
+    - Simple everyday numbers and short sums ("2 + 2 = 4") can stay as plain
+      text; use LaTeX when there is a fraction, power, root, symbol, or a
+      formula that is hard to read as plain text.
 12. Only show a formula or a step-by-step breakdown when the user explicitly
     asks for the steps/method, or when the question genuinely can't be
     understood without showing the work. Otherwise just explain the answer in
