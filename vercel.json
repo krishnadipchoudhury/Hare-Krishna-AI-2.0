@@ -3,6 +3,9 @@
     "api/chat.js": {
       "includeFiles": "knowledge/**",
       "maxDuration": 60
+    },
+    "api/extract-memory.js": {
+      "maxDuration": 15
     }
   }
 }
