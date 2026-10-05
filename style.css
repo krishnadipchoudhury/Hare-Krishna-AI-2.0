@@ -2613,6 +2613,49 @@ button:disabled {
 
 
 /* =========================================================
+   MEMORY BADGE ("Saved to memory" status bar)
+   ========================================================= */
+
+.memory-badge {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin-top: 8px;
+
+  padding: 5px 10px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 999px;
+
+  background: var(--panel-2);
+
+  color: var(--muted);
+
+  font-size: 12px;
+
+  cursor: pointer;
+}
+
+.memory-badge-icon {
+  display: flex;
+
+  align-items: center;
+
+  color: var(--accent);
+}
+
+.memory-badge:hover {
+  border-color: var(--accent);
+
+  color: var(--text);
+}
+
+
+/* =========================================================
    CODE BLOCK TOOLBAR (Copy / Fullscreen)
    ========================================================= */
 
@@ -2702,11 +2745,18 @@ button:disabled {
 
   align-items: center;
 
+  justify-content: center;
+
   color: var(--muted);
 
   flex: 0 0 auto;
 
   margin-right: 2px;
+}
+
+.chat-pin-icon svg,
+.chat-menu-popup .menu-icon svg {
+  display: block;
 }
 
 
@@ -3088,6 +3138,98 @@ button:disabled {
 
 
 /* =========================================================
+   LATEX (KaTeX) — math inside assistant replies
+   =========================================================
+   Formulas inherit the text colour, so light and dark mode
+   both work with no extra rules. Wide equations scroll
+   sideways inside the message instead of overflowing the
+   screen. KaTeX's own stylesheet (loaded in index.html)
+   supplies the fonts and glyph layout.
+   ========================================================= */
+
+.assistant .message .katex {
+  color: inherit;
+
+  font-size: 1.08em;
+
+  text-indent: 0;
+}
+
+.assistant .message .katex-display {
+  display: block;
+
+  max-width: 100%;
+
+  margin: .85em 0;
+
+  padding: .15em 0;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  text-align: center;
+
+  -webkit-overflow-scrolling: touch;
+}
+
+.assistant .message .katex-display > .katex {
+  display: inline-block;
+
+  max-width: none;
+
+  white-space: nowrap;
+
+  text-align: initial;
+}
+
+/* The message wraps long words, but a formula must never be
+   broken in the middle. */
+.assistant .message .katex,
+.assistant .message .katex-display,
+.assistant .message .katex * {
+  overflow-wrap: normal;
+
+  word-break: normal;
+}
+
+/* A paragraph that holds only an equation needs no extra gap. */
+.assistant .message p > .katex-display:only-child {
+  margin: .6em 0;
+}
+
+/* Invalid LaTeX — readable in both themes. */
+.assistant .message .katex .katex-error {
+  color: var(--danger) !important;
+}
+
+/* Shown only if KaTeX could not load (offline / blocked CDN):
+   the formula's source text instead of nothing. */
+.assistant .message .math-fallback {
+  padding: .05em .35em;
+
+  border-radius: 6px;
+
+  background: var(--panel-2);
+
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  font-size: .92em;
+
+  white-space: pre-wrap;
+}
+
+.assistant .message .math-fallback-display {
+  display: block;
+
+  margin: .7em 0;
+
+  padding: .55em .75em;
+
+  overflow-x: auto;
+}
+
+
+/* =========================================================
    COMPOSER
    ========================================================= */
 
@@ -3185,6 +3327,8 @@ button:disabled {
 
 .send-btn:disabled {
   opacity: .45;
+
+  cursor: not-allowed;
 }
 
 .composer-note {
