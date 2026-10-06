@@ -96,9 +96,41 @@
    Replace the values below with YOUR Firebase config.
    ========================================================= */
 
+/* ---------------------------------------------------------
+   GOOGLE SIGN-IN ON PHONES — OPTIONAL BUT RECOMMENDED FIX
+   ---------------------------------------------------------
+   Modern mobile browsers (Safari/iOS, Chrome) block the hidden
+   storage that Firebase uses to finish Google sign-in when the
+   login page lives on a different domain than your website
+   ("my-ai-69dc8.firebaseapp.com" vs your Vercel site). The
+   symptom: you pick your Google account, come back, and are
+   NOT signed in.
+
+   The fix is to let Firebase use YOUR OWN domain. The proxy is
+   already set up in vercel.json. To switch it on:
+     1. Put your site's domain below, WITHOUT https://
+        (example: "my-ai.vercel.app" or "chat.example.com").
+     2. In Google Cloud Console -> APIs & Services -> Credentials
+        -> your "Web client" -> Authorized redirect URIs, add:
+        https://YOUR-DOMAIN/__/auth/handler
+     3. In Firebase Console -> Authentication -> Settings ->
+        Authorized domains, make sure YOUR-DOMAIN is listed.
+   Leave it "" to keep the old behaviour.
+   --------------------------------------------------------- */
+
+const CUSTOM_AUTH_DOMAIN = "";
+
+const FIREBASE_AUTH_DOMAIN = "my-ai-69dc8.firebaseapp.com";
+
+// Only used on the exact site it was set for, so localhost and
+// Vercel preview URLs keep working the old way.
+const usingCustomAuthDomain =
+  !!CUSTOM_AUTH_DOMAIN &&
+  window.location.host === CUSTOM_AUTH_DOMAIN;
+
 const firebaseConfig = {
 apiKey: "AIzaSyDnXgAC-flp3Th0hxkz3TfH5Hm6DUy-zE0",
-authDomain: "my-ai-69dc8.firebaseapp.com",
+authDomain: usingCustomAuthDomain ? CUSTOM_AUTH_DOMAIN : FIREBASE_AUTH_DOMAIN,
 projectId: "my-ai-69dc8",
 storageBucket: "my-ai-69dc8.firebasestorage.app",
 messagingSenderId: "90216546592",
@@ -690,8 +722,24 @@ function getAuthErrorMessage(error) {
     case "auth/requires-recent-login":
       return "For your security, please sign in again before deleting your account.";
 
+    case "auth/unauthorized-domain":
+      return "This website's domain is not allowed for sign-in. Add it in Firebase Console → Authentication → Settings → Authorized domains.";
+
+    case "auth/web-storage-unsupported":
+    case "auth/operation-not-supported-in-this-environment":
+      return "This browser is blocking sign-in storage. Turn off private/incognito mode or 'Prevent cross-site tracking', or open the site in Chrome or Safari.";
+
+    case "auth/account-exists-with-different-credential":
+      return "An account already exists with this email using a different sign-in method.";
+
+    case "auth/internal-error":
+      return "Sign-in could not be completed. Please try again.";
+
     default:
-      return error.message || "Authentication failed.";
+      return (
+        (error.message || "Authentication failed.") +
+        (code ? " (" + code + ")" : "")
+      );
   }
 }
 
@@ -751,24 +799,54 @@ async function signInWithGoogle() {
 
     googleLoginBtn.disabled = true;
 
+    // Google refuses sign-in inside the in-app browsers of Instagram,
+    // Facebook, Snapchat, LINE, WeChat etc. (error 403
+    // "disallowed_useragent") — tell the person instead of failing.
+    if (
+      /FBAN|FBAV|Instagram|Snapchat|Line\/|MicroMessenger|; wv\)/i
+        .test(navigator.userAgent || "")
+    ) {
+      setAuthMessage(
+        "Google sign-in does not work inside this app's built-in browser. " +
+        "Tap ⋮ / Share and choose 'Open in Chrome' or 'Open in Safari', " +
+        "or sign in with email.",
+        "error"
+      );
+
+      return;
+    }
+
     const provider = new firebase.auth.GoogleAuthProvider();
 
     provider.setCustomParameters({
       prompt: "select_account"
     });
 
+    const isMobile =
+      /android|iphone|ipad|ipod|mobile/i
+        .test(navigator.userAgent || "");
+
+    // On phones a popup is the least reliable method. Once the site's
+    // own auth domain is set up (see CUSTOM_AUTH_DOMAIN), a full-page
+    // redirect is used there instead — that is the dependable way.
+    if (isMobile && usingCustomAuthDomain) {
+      await auth.signInWithRedirect(provider);
+      return;
+    }
+
     try {
       await auth.signInWithPopup(provider);
     } catch (popupError) {
 
       /*
-       * On some mobile browsers popup authentication
-       * can be blocked. Redirect is used as fallback.
+       * Popups can be blocked or unsupported (some mobile browsers,
+       * home-screen apps). Redirect is used as the fallback.
        */
 
       if (
         popupError.code === "auth/popup-blocked" ||
-        popupError.code === "auth/cancelled-popup-request"
+        popupError.code === "auth/cancelled-popup-request" ||
+        popupError.code === "auth/operation-not-supported-in-this-environment"
       ) {
         await auth.signInWithRedirect(provider);
         return;
@@ -1429,8 +1507,15 @@ function persistMemory() {
   }
 }
 
-function renderMemoryList() {
+function renderMemoryList(highlightIds) {
   if (!memoryList) return;
+
+  const highlight =
+    new Set(
+      Array.isArray(highlightIds) ? highlightIds : []
+    );
+
+  let firstHighlighted = null;
 
   memoryList.innerHTML = "";
 
@@ -1452,11 +1537,27 @@ function renderMemoryList() {
 
     item.className = "memory-item";
 
+    if (highlight.has(entry.id)) {
+      item.classList.add("memory-item-new");
+
+      if (!firstHighlighted) firstHighlighted = item;
+    }
+
     const text =
       document.createElement("div");
 
     text.className = "memory-item-text";
     text.textContent = entry.text;
+
+    if (entry.auto) {
+      const badge =
+        document.createElement("span");
+
+      badge.className = "memory-item-badge";
+      badge.textContent = "Saved by AI";
+
+      text.appendChild(badge);
+    }
 
     const del =
       document.createElement("button");
@@ -1476,6 +1577,25 @@ function renderMemoryList() {
 
     memoryList.appendChild(item);
   });
+
+  if (firstHighlighted) {
+    setTimeout(() => {
+      if (firstHighlighted.scrollIntoView) {
+        firstHighlighted.scrollIntoView({
+          block: "nearest",
+          behavior: "smooth"
+        });
+      }
+    }, 120);
+  }
+}
+
+// Opens Settings -> Memory (the saved-memory panel), with the facts
+// the AI just saved lit up.
+function openMemoryPanel(highlightIds) {
+  renderMemoryList(highlightIds);
+
+  openModal(memoryModal);
 }
 
 function addMemoryEntry(rawText) {
@@ -1494,6 +1614,380 @@ function addMemoryEntry(rawText) {
 
   showToast("Memory saved");
 }
+
+/* =========================================================
+   17f. AUTOMATIC MEMORY (learn from what the person says)
+   =========================================================
+   After every message, /api/extract-memory (Groq) picks out
+   lasting facts — age, class, school, city, plans, likes… —
+   and they are added to Settings -> Memory. A permanent
+   "Saved to memory" bar then appears inside the AI's answer;
+   clicking it opens the saved-memory panel.
+   Everything here is best-effort and runs in the background:
+   if the request fails, is slow, or finds nothing, the chat
+   is completely unaffected.
+   ========================================================= */
+
+const MEMORY_MAX_ITEMS = 100;
+
+// A message only goes to the extractor if it talks about the
+// person (English + common Hinglish), which skips most
+// pure questions / maths and saves server calls.
+const PERSONAL_HINT_REGEX =
+  /\b(i|i'm|im|i've|ive|i'll|ill|i'd|my|mine|myself|me|we|our|mera|meri|mere|main|mujhe|hum|hamara|hamari|hamare|favou?rite|going to|planning to)\b/i;
+
+// Anything that looks like a credential or financial/ID secret.
+// A sentence matching this is NEVER sent to the extractor and NEVER
+// saved (api/extract-memory.js applies the same rules again).
+const SECRET_HINT_REGEX =
+  new RegExp(
+    "\\b(" +
+      "pass(?:word|wd|code|phrase)s?|pin|otp|cvv|cvc|ssn|" +
+      "api[ _-]?keys?|secret[ _-]?keys?|client[ _-]?secret|" +
+      "(?:access|auth(?:orization)?|bearer|refresh|session|login)[ _-]?tokens?|tokens?|" +
+      "credentials?|private[ _-]?keys?|seed[ _-]?phrase|" +
+      "(?:recovery|backup|security|verification)[ _-]?(?:code|phrase|answer)s?|" +
+      "2fa|mfa|credit[ _-]?card|debit[ _-]?card|card[ _-]?number|" +
+      "account[ _-]?number|routing[ _-]?number|social[ _-]?security|" +
+      "aadhaa?r|bank[ _-]?account" +
+    ")\\b" +
+    "|(?:\\d[ -]?){9,}" +
+    "|\\b(?:sk|pk|gsk|ghp|xox[abp]|AKIA)[-_A-Za-z0-9]{16,}" +
+    "|\\b(?=[A-Za-z0-9_-]*\\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\\b",
+    "i"
+  );
+
+// Removes every sentence that mentions a secret, keeps the rest:
+// "My favorite color is red. My password is abc" -> "My favorite
+// color is red."  Returns "" if nothing safe is left.
+function stripSecretSentences(text) {
+  return String(text || "")
+    .split(/(?<=[.!?\n;])\s+|\n+/)
+    .filter(part => part.trim() && !SECRET_HINT_REGEX.test(part))
+    .join(" ")
+    .trim();
+}
+
+function normalizeMemoryText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097f ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isDuplicateMemory(text) {
+  const wanted = normalizeMemoryText(text);
+
+  if (!wanted) return true;
+
+  return memoryItems.some(entry => {
+    const have = normalizeMemoryText(entry.text);
+
+    return (
+      have === wanted ||
+      (have.length > 12 && wanted.includes(have)) ||
+      (wanted.length > 12 && have.includes(wanted))
+    );
+  });
+}
+
+// What the AI is shown on every request (newest first).
+function getMemoryForApi() {
+  if (!memoryEnabled) return [];
+
+  return memoryItems
+    .slice(0, 40)
+    .map(entry =>
+      String(entry.text || "").slice(0, 200)
+    )
+    .filter(Boolean);
+}
+
+// True when this person's own facts/memory are part of a request.
+function hasPersonalContext() {
+  if (getMemoryForApi().length) return true;
+
+  try {
+    return Object.keys(getKnownFacts()).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function buildMemorySavedBar(facts, ids) {
+  const list =
+    Array.isArray(facts) ? facts : [];
+
+  const bar =
+    document.createElement("div");
+
+  bar.className = "memory-saved-bar";
+
+  bar.setAttribute("role", "button");
+  bar.tabIndex = 0;
+
+  bar.title =
+    "Saved to memory:\n• " +
+    list.join("\n• ") +
+    "\n\nClick to open your saved memory";
+
+  const icon =
+    document.createElement("span");
+
+  icon.className = "memory-saved-icon";
+
+  // brain-style "memory" mark
+  icon.innerHTML =
+    "<svg viewBox='0 0 24 24' width='16' height='16' " +
+    "fill='none' stroke='currentColor' stroke-width='2' " +
+    "stroke-linecap='round' stroke-linejoin='round' " +
+    "aria-hidden='true' focusable='false'>" +
+    "<path d='M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z'></path>" +
+    "<path d='M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z'></path>" +
+    "<path d='M12 5v13'></path></svg>";
+
+  const label =
+    document.createElement("span");
+
+  label.className = "memory-saved-label";
+
+  const title =
+    document.createElement("strong");
+
+  title.textContent = "Saved to memory";
+
+  const detail =
+    document.createElement("span");
+
+  detail.className = "memory-saved-detail";
+
+  detail.textContent =
+    list.join(" · ");
+
+  label.appendChild(title);
+  label.appendChild(detail);
+
+  const arrow =
+    document.createElement("span");
+
+  arrow.className = "memory-saved-arrow";
+  arrow.setAttribute("aria-hidden", "true");
+  arrow.textContent = "›";
+
+  bar.appendChild(icon);
+  bar.appendChild(label);
+  bar.appendChild(arrow);
+
+  // The whole bar — logo included — opens the saved-memory panel.
+  const open = () => openMemoryPanel(ids);
+
+  bar.addEventListener("click", open);
+
+  bar.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+
+      open();
+    }
+  });
+
+  return bar;
+}
+
+// If the AI's answer is already on screen when the facts finish
+// saving, the bar slides in under it. (If the answer is still being
+// written, it simply appears when the answer is finished — the
+// facts are stored on the message, and renderMessage reads them.)
+function showMemorySavedBar(chatId, createdAt, facts, ids) {
+  if (chatId !== currentChatId || !messages) return;
+
+  const userRow =
+    messages.querySelector(
+      '.message-row.user[data-created="' + createdAt + '"]'
+    );
+
+  if (!userRow) return;
+
+  const answerRow =
+    userRow.nextElementSibling;
+
+  if (
+    !answerRow ||
+    !answerRow.classList.contains("assistant") ||
+    answerRow.id === "assistantRevealTemp"
+  ) {
+    return;
+  }
+
+  const wrapper =
+    answerRow.querySelector(".message-wrapper");
+
+  if (!wrapper) return;
+
+  const old =
+    wrapper.querySelector(".memory-saved-bar");
+
+  if (old) old.remove();
+
+  const bar =
+    buildMemorySavedBar(facts, ids);
+
+  const actions =
+    wrapper.querySelector(".message-actions");
+
+  if (actions) {
+    wrapper.insertBefore(bar, actions);
+  } else {
+    wrapper.appendChild(bar);
+  }
+
+  scrollToBottomIfFollowing();
+}
+
+async function learnFromUserMessage(text, chatId, createdAt) {
+  try {
+    if (!memoryEnabled) return;
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      return;
+    }
+
+    const chat = findChatById(chatId);
+
+    // Incognito chats never write to Memory.
+    if (!chat || chat.incognito) return;
+
+    // Sentences that look like secrets are removed BEFORE anything
+    // leaves the browser — the rest of the message is still used.
+    const clean = stripSecretSentences(text);
+
+    if (clean.length < 8 || clean.length > 1500) return;
+
+    if (!PERSONAL_HINT_REGEX.test(clean)) return;
+
+    const controller =
+      typeof AbortController !== "undefined"
+        ? new AbortController()
+        : null;
+
+    const timer =
+      setTimeout(
+        () => controller && controller.abort(),
+        15000
+      );
+
+    let response;
+
+    try {
+      response =
+        await fetch("/api/extract-memory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: clean }),
+          signal: controller ? controller.signal : undefined
+        });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!response || !response.ok) return;
+
+    const data = await response.json();
+
+    const found =
+      Array.isArray(data && data.facts)
+        ? data.facts
+        : [];
+
+    const added = [];
+
+    const addedIds = [];
+
+    found.forEach(fact => {
+      const factText =
+        String(fact || "").replace(/\s+/g, " ").trim();
+
+      if (
+        !factText ||
+        factText.length > 140 ||
+        SECRET_HINT_REGEX.test(factText) ||
+        isDuplicateMemory(factText)
+      ) {
+        return;
+      }
+
+      const entry = {
+        id: generateId(),
+        text: factText,
+        createdAt: Date.now(),
+        auto: true
+      };
+
+      memoryItems.unshift(entry);
+
+      added.push(factText);
+
+      addedIds.push(entry.id);
+    });
+
+    if (!added.length) return;
+
+    // Keep the list bounded: oldest automatic entries go first.
+    while (memoryItems.length > MEMORY_MAX_ITEMS) {
+      let index = -1;
+
+      for (let i = memoryItems.length - 1; i >= 0; i--) {
+        if (memoryItems[i].auto) {
+          index = i;
+          break;
+        }
+      }
+
+      memoryItems.splice(
+        index === -1 ? memoryItems.length - 1 : index,
+        1
+      );
+    }
+
+    persistMemory();
+
+    renderMemoryList();
+
+    // Remember on the message itself that it taught us something,
+    // so the chip is still there when the chat is reopened.
+    const latest = findChatById(chatId);
+
+    const target =
+      latest &&
+      createdAt &&
+      latest.messages.find(
+        m => m.role === "user" && m.createdAt === createdAt
+      );
+
+    if (target) {
+      target.memorySaved = added;
+
+      target.memorySavedIds = addedIds;
+
+      saveGuestChats();
+
+      if (!isGuest && currentUser && !latest.incognito) {
+        saveChatToFirestore(latest);
+      }
+
+      showMemorySavedBar(chatId, createdAt, added, addedIds);
+
+    } else {
+      showToast("Saved to memory");
+    }
+
+  } catch (error) {
+    // Silent on purpose — see the section note above.
+    console.warn("Memory extraction skipped:", error);
+  }
+}
+
 
 function deleteMemoryEntry(id) {
   memoryItems =
@@ -1912,7 +2406,11 @@ async function checkRedirectLogin() {
   }
 
   try {
-    await auth.getRedirectResult();
+    const result = await auth.getRedirectResult();
+
+    if (result && result.user) {
+      console.log("Signed in after redirect.");
+    }
   } catch (error) {
     console.error(
       "Redirect login error:",
@@ -3404,6 +3902,11 @@ function renderMessage(
         : "assistant"
     );
 
+  // Lets the "Saved in memory" chip find its message later.
+  if (message.createdAt) {
+    row.dataset.created = String(message.createdAt);
+  }
+
   if (
     message.role ===
     "assistant"
@@ -3448,6 +3951,34 @@ function renderMessage(
     wrapper,
     message.sources
   );
+
+  // "Saved to memory" bar: shown inside the AI answer that replies
+  // to a message which taught the AI something lasting. It is read
+  // from the saved chat data, so it is permanent (survives reload,
+  // regenerate and re-opening the chat).
+  if (message.role === "assistant") {
+    const ownerChat =
+      getCurrentChat();
+
+    const askedMessage =
+      ownerChat && index > 0
+        ? ownerChat.messages[index - 1]
+        : null;
+
+    if (
+      askedMessage &&
+      askedMessage.role === "user" &&
+      Array.isArray(askedMessage.memorySaved) &&
+      askedMessage.memorySaved.length
+    ) {
+      wrapper.appendChild(
+        buildMemorySavedBar(
+          askedMessage.memorySaved,
+          askedMessage.memorySavedIds
+        )
+      );
+    }
+  }
 
   if (
     message.role ===
@@ -3583,7 +4114,9 @@ function renderMessage(
       actions
     );
 
-  } else {
+  } else if (
+    isLastUserMessageIndex(getCurrentChat(), index)
+  ) {
 
     const actions =
       document.createElement("div");
@@ -3628,6 +4161,59 @@ function renderMessage(
   row.appendChild(wrapper);
 
   messages.appendChild(row);
+}
+
+
+/* =========================================================
+   27a. ONLY THE LAST MESSAGE CAN BE EDITED / REGENERATED
+   =========================================================
+   Editing or regenerating something in the middle of a chat
+   would silently throw away every message after it, so both
+   are limited to the end of the conversation:
+     • Edit        -> the person's LAST message only
+     • Regenerate  -> the AI's LAST reply only
+   The buttons are hidden everywhere else, and the functions
+   themselves refuse too (so it holds even if a stale button
+   is somehow still on screen).
+   ========================================================= */
+
+function isLastUserMessageIndex(chat, index) {
+  if (!chat || !chat.messages[index]) return false;
+
+  if (chat.messages[index].role !== "user") return false;
+
+  return !chat.messages
+    .slice(index + 1)
+    .some(m => m.role === "user");
+}
+
+function isLastReplyIndex(chat, index) {
+  return (
+    !!chat &&
+    index === chat.messages.length - 1 &&
+    !!chat.messages[index] &&
+    chat.messages[index].role === "assistant"
+  );
+}
+
+// After a new message arrives, older user messages lose their
+// Edit button (only the newest keeps it).
+function refreshMessageActionAvailability() {
+  if (!messages) return;
+
+  const userRows =
+    messages.querySelectorAll(".message-row.user");
+
+  userRows.forEach((userRow, position) => {
+    if (position < userRows.length - 1) {
+      const actions =
+        userRow.querySelector(".message-actions");
+
+      if (actions) actions.remove();
+    }
+  });
+
+  closeAllMessageMenus();
 }
 
 
@@ -3696,30 +4282,33 @@ function toggleMessageMenu(
 
   popup.appendChild(selectBtn);
 
-  // --- Regenerate ---
+  // --- Regenerate (last reply only) ---
 
-  const regenerateBtn =
-    document.createElement("button");
+  if (isLastReplyIndex(getCurrentChat(), index)) {
 
-  regenerateBtn.type = "button";
+    const regenerateBtn =
+      document.createElement("button");
 
-  regenerateBtn.innerHTML =
-    "<span class='menu-icon'>" +
-    ICONS.regenerate +
-    "</span><span>Regenerate</span>";
+    regenerateBtn.type = "button";
 
-  regenerateBtn.addEventListener(
-    "click",
-    event => {
-      event.stopPropagation();
+    regenerateBtn.innerHTML =
+      "<span class='menu-icon'>" +
+      ICONS.regenerate +
+      "</span><span>Regenerate</span>";
 
-      closeAllMessageMenus();
+    regenerateBtn.addEventListener(
+      "click",
+      event => {
+        event.stopPropagation();
 
-      regenerateResponse(index);
-    }
-  );
+        closeAllMessageMenus();
 
-  popup.appendChild(regenerateBtn);
+        regenerateResponse(index);
+      }
+    );
+
+    popup.appendChild(regenerateBtn);
+  }
 
   actionsContainer.appendChild(popup);
 }
@@ -3787,6 +4376,9 @@ async function regenerateResponse(index) {
 
   if (!chat) return;
 
+  // Only the AI's last reply can be regenerated.
+  if (!isLastReplyIndex(chat, index)) return;
+
   // Find the user message this reply was answering.
   let userText = null;
 
@@ -3813,7 +4405,7 @@ async function regenerateResponse(index) {
 
   await generateAndAppendAssistantReply(
     userText,
-    { skipCache: true }
+    { skipCache: true, chatId: chat.id }
   );
 }
 
@@ -3839,6 +4431,9 @@ function startEditUserMessage(
     chat.messages[index];
 
   if (!message) return;
+
+  // Only the person's last message can be edited.
+  if (!isLastUserMessageIndex(chat, index)) return;
 
   const wrapper =
     row.querySelector(".message-wrapper");
@@ -3927,6 +4522,9 @@ async function submitEditedMessage(index, newText) {
     getCurrentChat();
 
   if (!chat) return;
+
+  // Only the person's last message can be edited.
+  if (!isLastUserMessageIndex(chat, index)) return;
 
   // Editing a message replaces the conversation from this point
   // on — this message plus anything after it (including the old
@@ -4048,6 +4646,9 @@ function appendMessageIncremental(message, index) {
 
   renderMessage(message, index);
 
+  // A newer message now exists: older ones lose their Edit button.
+  refreshMessageActionAvailability();
+
   scrollToBottom();
 }
 
@@ -4112,6 +4713,17 @@ async function sendMessage() {
     text,
     [],
     chatId
+  );
+
+  // Runs in the background, alongside the AI reply: pulls lasting
+  // facts out of this message and saves them to Memory.
+  const savedMessage =
+    findChatById(chatId)?.messages.at(-1);
+
+  learnFromUserMessage(
+    text,
+    chatId,
+    savedMessage ? savedMessage.createdAt : null
   );
 
   await generateAndAppendAssistantReply(
@@ -4186,7 +4798,10 @@ async function generateAndAppendAssistantReply(
         // Only the genuinely web-searched answers are worth
         // caching — math and knowledge.json answers are already
         // instant and local, re-caching them adds nothing.
-        if (result.usedSearch) {
+        // The cache is shared by EVERY user, so an answer that was
+        // written while the person's own memory/facts were in play
+        // (it may mention them) is never stored there.
+        if (result.usedSearch && !hasPersonalContext()) {
           saveLearnedAnswer(
             userText,
             result.text,
@@ -5006,7 +5621,8 @@ async function streamAssistantMessage(userText, chatId) {
         body: JSON.stringify({
           message: userText,
           history: getRecentHistoryForApi(chatId),
-          facts: getKnownFacts()
+          facts: getKnownFacts(),
+          memory: getMemoryForApi()
         }),
         signal:
           abortController
