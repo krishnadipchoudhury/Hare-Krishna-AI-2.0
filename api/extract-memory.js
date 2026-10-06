@@ -66,10 +66,37 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 // than saved in any form (even redacted).
 
 const SECRET_PATTERN =
-  /\b(password|passwd|pin\s*(code|number)?|otp|one[- ]time\s*(code|password)|api[- ]?key|access\s*token|auth(?:orization)?\s*token|secret\s*key|credit\s*card|debit\s*card|card\s*number|cvv|cvc|ssn|social\s*security|bank\s*account|routing\s*number)\b/i;
+  new RegExp(
+    "\\b(" +
+      "pass(?:word|wd|code|phrase)s?|pin|otp|cvv|cvc|ssn|" +
+      "api[ _-]?keys?|secret[ _-]?keys?|client[ _-]?secret|" +
+      "(?:access|auth(?:orization)?|bearer|refresh|session|login)[ _-]?tokens?|tokens?|" +
+      "credentials?|private[ _-]?keys?|seed[ _-]?phrase|" +
+      "(?:recovery|backup|security|verification)[ _-]?(?:code|phrase|answer)s?|" +
+      "2fa|mfa|credit[ _-]?card|debit[ _-]?card|card[ _-]?number|" +
+      "account[ _-]?number|routing[ _-]?number|social[ _-]?security|" +
+      "aadhaa?r|bank[ _-]?account|one[ -]?time[ -]?(?:code|password)" +
+    ")\\b" +
+    // long digit runs (card / account / phone / ID numbers)
+    "|(?:\\d[ -]?){9,}" +
+    // well-known API-key shapes, and long mixed letter+digit strings
+    "|\\b(?:sk|pk|gsk|ghp|xox[abp]|AKIA)[-_A-Za-z0-9]{16,}" +
+    "|\\b(?=[A-Za-z0-9_-]*\\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\\b",
+    "i"
+  );
 
 function stripSecretFacts(facts) {
   return facts.filter(fact => !SECRET_PATTERN.test(fact));
+}
+
+// Drops every sentence that mentions a secret, keeps the rest, so a
+// secret is never even sent on to the AI model.
+function stripSecretSentences(text) {
+  return String(text || "")
+    .split(/(?<=[.!?\n;])\s+|\n+/)
+    .filter(part => part.trim() && !SECRET_PATTERN.test(part))
+    .join(" ")
+    .trim();
 }
 
 // ============================================================
@@ -91,6 +118,16 @@ export default async function handler(request, response) {
         : "";
 
     if (!message) {
+      response.status(200).json({ facts: [] });
+      return;
+    }
+
+    // Secret-looking sentences are removed BEFORE the text goes to the
+    // AI model. Only the first part of a long message is ever needed.
+    const messageForModel =
+      stripSecretSentences(message).slice(0, 1500);
+
+    if (!messageForModel) {
       response.status(200).json({ facts: [] });
       return;
     }
@@ -134,26 +171,42 @@ markdown, no code fences, no explanation. If there is nothing worth
 remembering, respond with exactly: []
 `;
 
-    const groqResponse = await fetchWithTimeout(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+    // openai/gpt-oss-20b is a REASONING model: its hidden "thinking"
+    // tokens are counted against max_tokens. With a small budget the
+    // model can run out while still thinking and return an EMPTY
+    // answer — which would silently mean "no facts, ever". So the
+    // thinking is kept short and the budget is generous.
+    async function callGroq(extra) {
+      return fetchWithTimeout(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-oss-20b",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: messageForModel }
+            ],
+            temperature: 0.1,
+            max_tokens: 1200,
+            ...extra
+          })
         },
-        body: JSON.stringify({
-          model: "openai/gpt-oss-20b",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message }
-          ],
-          temperature: 0.1,
-          max_tokens: 300
-        })
-      },
-      12000
-    );
+        12000
+      );
+    }
+
+    let groqResponse =
+      await callGroq({ reasoning_effort: "low" });
+
+    // If the optional parameter is ever rejected, try the plain call.
+    if (!groqResponse.ok) {
+      groqResponse = await callGroq({});
+    }
 
     if (!groqResponse.ok) {
       response.status(200).json({ facts: [] });
@@ -179,15 +232,21 @@ remembering, respond with exactly: []
           .replace(/```$/, "")
           .trim();
 
+      // Be forgiving if the model wrapped the array in extra words.
+      const arrayText =
+        cleaned.startsWith("[")
+          ? cleaned
+          : (cleaned.match(/\[[\s\S]*\]/) || [""])[0];
+
       try {
-        const parsed = JSON.parse(cleaned);
+        const parsed = JSON.parse(arrayText);
 
         if (Array.isArray(parsed)) {
           facts =
             parsed
               .filter(item => typeof item === "string")
-              .map(item => item.trim())
-              .filter(Boolean)
+              .map(item => item.replace(/\s+/g, " ").trim())
+              .filter(item => item && item.length <= 140)
               .slice(0, 8);
         }
       } catch {
