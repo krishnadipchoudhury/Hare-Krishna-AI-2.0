@@ -3192,12 +3192,13 @@ button:disabled {
   word-break: normal;
 }
 
-/* FRACTIONS are drawn 3x bigger than the surrounding text.
-   Change --fraction-scale to resize them (1 = normal size).
+/* FRACTIONS are drawn a little bigger than the surrounding text.
+   Change --fraction-scale to resize them (1 = normal size,
+   1.2 = slightly bigger, 1.5 = clearly bigger).
    A fraction inside a fraction is kept at normal scale so it
    never grows to 9x. */
 .assistant .message {
-  --fraction-scale: 3;
+  --fraction-scale: 1.35;
 }
 
 .assistant .message .katex .mfrac {
