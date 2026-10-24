@@ -591,11 +591,39 @@ const toast = $("toast");
 const settingsBtn = $("settingsBtn");
 const settingsModal = $("settingsModal");
 
-const settingsAvatar = $("settingsAvatar");
-const settingsName = $("settingsName");
-const settingsEmail = $("settingsEmail");
+// Settings -> Account
+const accountEmailBtn = $("accountEmailBtn");
+const accountEmailValue = $("accountEmailValue");
+const accountEmailHint = $("accountEmailHint");
+const accountNameBtn = $("accountNameBtn");
+const accountNameValue = $("accountNameValue");
 
-const manageAccountBtn = $("manageAccountBtn");
+// Name editor (full-screen page opened from Settings -> Name)
+const nameEditScreen = $("nameEditScreen");
+const nameEditBack = $("nameEditBack");
+const nameEditSave = $("nameEditSave");
+const nameEditInput = $("nameEditInput");
+const nameEditError = $("nameEditError");
+
+// Onboarding (terms -> name -> date of birth)
+const onboardingScreen = $("onboardingScreen");
+const onbStepTerms = $("onbStepTerms");
+const onbStepName = $("onbStepName");
+const onbStepDob = $("onbStepDob");
+const onbTermsCheck = $("onbTermsCheck");
+const onbPrivacyCheck = $("onbPrivacyCheck");
+const onbTermsHint = $("onbTermsHint");
+const onbTermsNext = $("onbTermsNext");
+const onbNameInput = $("onbNameInput");
+const onbNameError = $("onbNameError");
+const onbNameNext = $("onbNameNext");
+const onbDobDay = $("onbDobDay");
+const onbDobMonth = $("onbDobMonth");
+const onbDobYear = $("onbDobYear");
+const onbDobError = $("onbDobError");
+const onbDobConfirm = $("onbDobConfirm");
+const onbExitBtn = $("onbExitBtn");
+
 const settingsSignOutBtn = $("settingsSignOutBtn");
 
 const deleteAccountBtn = $("deleteAccountBtn");
@@ -723,7 +751,12 @@ function getAuthErrorMessage(error) {
       return "For your security, please sign in again before deleting your account.";
 
     case "auth/unauthorized-domain":
-      return "This website's domain is not allowed for sign-in. Add it in Firebase Console → Authentication → Settings → Authorized domains.";
+      return (
+        "This website's domain (" +
+        window.location.hostname +
+        ") is not allowed for sign-in. Add exactly this domain in " +
+        "Firebase Console → Authentication → Settings → Authorized domains."
+      );
 
     case "auth/web-storage-unsupported":
     case "auth/operation-not-supported-in-this-environment":
@@ -756,6 +789,10 @@ function showAuthScreen() {
   if (appScreen) {
     appScreen.classList.add("hidden");
   }
+
+  if (onboardingScreen) {
+    onboardingScreen.classList.add("hidden");
+  }
 }
 
 
@@ -764,8 +801,21 @@ function showAuthScreen() {
    ========================================================= */
 
 function showAppScreen() {
+  // Every way into the app (Google, email + password, guest) ends
+  // up here — so this is the single gate: until the person has
+  // accepted the terms and given a name and date of birth, they are
+  // sent to the onboarding pages instead of the chat.
+  if (!isProfileComplete(userProfile)) {
+    showOnboarding();
+    return;
+  }
+
   if (authScreen) {
     authScreen.classList.add("hidden");
+  }
+
+  if (onboardingScreen) {
+    onboardingScreen.classList.add("hidden");
   }
 
   if (appScreen) {
@@ -1075,6 +1125,8 @@ function continueAsGuest() {
 
   loadMemoryLocal();
 
+  loadGuestProfile();
+
   updateUserPanel();
 
   showAppScreen();
@@ -1082,6 +1134,777 @@ function continueAsGuest() {
   showToast("Continuing without login");
 
   createNewChat(false);
+}
+
+
+/* =========================================================
+   15b. PROFILE + ONBOARDING
+   =========================================================
+   After ANY way of getting in (Google, email + password, guest)
+   a person who has not finished onboarding sees three pages:
+
+     1. Terms and Privacy  — tick the boxes, "Next" appears
+     2. Name               — "Next" appears once a name is typed
+     3. Date of birth      — typed by hand (no calendar), must be
+                             a real date and the person must be
+                             old enough, then "Confirm"
+
+   The result is saved as the person's profile (Firestore for
+   signed-in users, this device for guests) and is never asked
+   again. The name can be changed later in Settings -> Account.
+   ========================================================= */
+
+const PROFILE_LOCAL_PREFIX = "hareKrishnaProfile:";
+
+const MIN_AGE = 13;
+
+let userProfile = null;
+
+let onboardingStep = "terms";
+
+function profileStorageKey() {
+  return (
+    PROFILE_LOCAL_PREFIX +
+    (isGuest || !currentUser ? "guest" : currentUser.uid)
+  );
+}
+
+function readLocalProfile() {
+  try {
+    const raw =
+      localStorage.getItem(profileStorageKey());
+
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalProfile(profile) {
+  try {
+    localStorage.setItem(
+      profileStorageKey(),
+      JSON.stringify(profile)
+    );
+  } catch {}
+}
+
+function isProfileComplete(profile) {
+  return (
+    !!profile &&
+    profile.onboardingCompleted === true &&
+    typeof profile.name === "string" &&
+    profile.name.trim().length > 0 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(profile.dob || "")
+  );
+}
+
+// Guests: the profile lives on this device only.
+function loadGuestProfile() {
+  const local = readLocalProfile();
+
+  userProfile =
+    isProfileComplete(local) ? local : null;
+}
+
+// Signed-in people: Firestore is the source of truth (so a new
+// phone or browser does not ask again); this device's copy is the
+// fallback when offline.
+async function loadUserProfile() {
+  userProfile = null;
+
+  if (!currentUser) return;
+
+  const uid = currentUser.uid;
+
+  try {
+    if (db) {
+      const snap =
+        await db.collection("users").doc(uid).get();
+
+      // Someone else signed in while we were waiting.
+      if (!currentUser || currentUser.uid !== uid) return;
+
+      const data =
+        snap.exists ? snap.data() : null;
+
+      if (
+        data &&
+        data.onboardingCompleted === true &&
+        data.profileName &&
+        data.dateOfBirth
+      ) {
+        userProfile = {
+          name: String(data.profileName),
+          dob: String(data.dateOfBirth),
+          onboardingCompleted: true,
+          termsAcceptedAt: data.termsAcceptedAt || null
+        };
+
+        writeLocalProfile(userProfile);
+
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("Could not load profile:", error);
+  }
+
+  const local = readLocalProfile();
+
+  if (isProfileComplete(local)) {
+    userProfile = local;
+
+    // It was finished on this device but never reached Firestore.
+    saveProfileToFirestore(local);
+  }
+}
+
+function saveProfileToFirestore(profile) {
+  if (isGuest || !currentUser || !db || !profile) return;
+
+  // Not awaited on purpose: offline, Firestore queues the write and
+  // resolves it later; waiting here would freeze the screen.
+  db.collection("users")
+    .doc(currentUser.uid)
+    .set(
+      {
+        profileName: profile.name,
+        dateOfBirth: profile.dob,
+        onboardingCompleted: true,
+        termsAcceptedAt: profile.termsAcceptedAt || null
+      },
+      { merge: true }
+    )
+    .catch(error => {
+      console.warn("Profile save failed:", error);
+    });
+}
+
+function saveProfile(profile) {
+  userProfile = profile;
+
+  writeLocalProfile(profile);
+
+  saveProfileToFirestore(profile);
+}
+
+// The name shown everywhere in the app.
+function getProfileName() {
+  if (userProfile && userProfile.name) {
+    return userProfile.name;
+  }
+
+  if (!isGuest && currentUser) {
+    return (
+      currentUser.displayName ||
+      (currentUser.email
+        ? currentUser.email.split("@")[0]
+        : "User")
+    );
+  }
+
+  return "Guest";
+}
+
+
+/* ---------- validation ---------- */
+
+// letters (any language), spaces, . ' - — no digits, no symbols
+const NAME_PATTERN =
+  /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]*$/u;
+
+function validateProfileName(raw) {
+  const value =
+    String(raw || "").replace(/\s+/g, " ").trim();
+
+  if (!value) {
+    return { ok: false, value, error: "" };
+  }
+
+  if (value.length < 2) {
+    return {
+      ok: false,
+      value,
+      error: "Name must be at least 2 characters."
+    };
+  }
+
+  if (value.length > 40) {
+    return {
+      ok: false,
+      value,
+      error: "Name can be at most 40 characters."
+    };
+  }
+
+  if (!NAME_PATTERN.test(value)) {
+    return {
+      ok: false,
+      value,
+      error:
+        "Please use letters only (spaces, . ' and - are fine)."
+    };
+  }
+
+  return { ok: true, value, error: "" };
+}
+
+function pad2(number) {
+  return String(number).padStart(2, "0");
+}
+
+// Checks a typed date of birth. Returns { ok, iso, age } when it is
+// a real calendar date and old enough; { incomplete: true } while the
+// boxes are still being filled; otherwise { ok: false, error }.
+function validateDob(dayText, monthText, yearText, now) {
+  const today = now || new Date();
+
+  const dayStr = String(dayText || "").trim();
+  const monthStr = String(monthText || "").trim();
+  const yearStr = String(yearText || "").trim();
+
+  if (
+    !/^\d{1,2}$/.test(dayStr) ||
+    !/^\d{1,2}$/.test(monthStr) ||
+    !/^\d{4}$/.test(yearStr)
+  ) {
+    return { ok: false, incomplete: true };
+  }
+
+  const day = Number(dayStr);
+  const month = Number(monthStr);
+  const year = Number(yearStr);
+
+  if (year < today.getFullYear() - 120) {
+    return {
+      ok: false,
+      error: "Please enter a valid year of birth."
+    };
+  }
+
+  if (month < 1 || month > 12) {
+    return {
+      ok: false,
+      error: "Month must be between 01 and 12."
+    };
+  }
+
+  // day 0 of the NEXT month = last day of this month (handles leap years)
+  const daysInMonth =
+    new Date(year, month, 0).getDate();
+
+  if (day < 1 || day > daysInMonth) {
+    return {
+      ok: false,
+      error:
+        day < 1
+          ? "Day must be 01 or more."
+          : "That month only has " + daysInMonth + " days."
+    };
+  }
+
+  const birth =
+    new Date(year, month - 1, day);
+
+  const todayStart =
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
+
+  if (birth > todayStart) {
+    return {
+      ok: false,
+      error: "Date of birth can't be in the future."
+    };
+  }
+
+  let age =
+    today.getFullYear() - year;
+
+  const birthdayNotYet =
+    today.getMonth() + 1 < month ||
+    (
+      today.getMonth() + 1 === month &&
+      today.getDate() < day
+    );
+
+  if (birthdayNotYet) age--;
+
+  if (age < MIN_AGE) {
+    return {
+      ok: false,
+      underage: true,
+      age,
+      error:
+        "You must be at least " +
+        MIN_AGE +
+        " years old to use Hare Krishna AI."
+    };
+  }
+
+  return {
+    ok: true,
+    age,
+    iso: year + "-" + pad2(month) + "-" + pad2(day)
+  };
+}
+
+
+/* ---------- the three pages ---------- */
+
+function showOnboardingStep(step) {
+  onboardingStep = step;
+
+  const steps = {
+    terms: onbStepTerms,
+    name: onbStepName,
+    dob: onbStepDob
+  };
+
+  Object.keys(steps).forEach(key => {
+    if (steps[key]) {
+      steps[key].classList.toggle("hidden", key !== step);
+    }
+  });
+
+  const target =
+    step === "name"
+      ? onbNameInput
+      : step === "dob"
+        ? onbDobDay
+        : null;
+
+  if (target && target.focus) {
+    setTimeout(() => target.focus(), 60);
+  }
+}
+
+function showOnboarding() {
+  if (authScreen) authScreen.classList.add("hidden");
+  if (appScreen) appScreen.classList.add("hidden");
+
+  if (onboardingScreen) {
+    onboardingScreen.classList.remove("hidden");
+  }
+
+  // The exit link: guests go back to login, others sign out.
+  if (onbExitBtn) {
+    onbExitBtn.textContent =
+      isGuest || !currentUser ? "Back to login" : "Sign out";
+  }
+
+  // Always starts from page 1 with nothing pre-ticked.
+  if (onbTermsCheck) onbTermsCheck.checked = false;
+  if (onbPrivacyCheck) onbPrivacyCheck.checked = false;
+  if (onbNameInput) onbNameInput.value = "";
+  if (onbDobDay) onbDobDay.value = "";
+  if (onbDobMonth) onbDobMonth.value = "";
+  if (onbDobYear) onbDobYear.value = "";
+
+  updateTermsStep();
+  updateNameStep();
+  updateDobStep();
+
+  showOnboardingStep("terms");
+}
+
+// Step 1 — the Next button appears as soon as a box is ticked, and
+// can be pressed once BOTH are accepted.
+function updateTermsStep() {
+  const terms = !!(onbTermsCheck && onbTermsCheck.checked);
+  const privacy = !!(onbPrivacyCheck && onbPrivacyCheck.checked);
+
+  const any = terms || privacy;
+  const both = terms && privacy;
+
+  if (onbTermsNext) {
+    onbTermsNext.classList.toggle("hidden", !any);
+    onbTermsNext.disabled = !both;
+  }
+
+  if (onbTermsHint) {
+    onbTermsHint.classList.toggle("hidden", !(any && !both));
+  }
+}
+
+// Step 2 — Next stays hidden until a valid name has been typed.
+function updateNameStep() {
+  const result =
+    validateProfileName(
+      onbNameInput ? onbNameInput.value : ""
+    );
+
+  if (onbNameNext) {
+    onbNameNext.classList.toggle("hidden", !result.ok);
+  }
+
+  if (onbNameError) {
+    onbNameError.textContent = result.error;
+
+    onbNameError.classList.toggle("hidden", !result.error);
+  }
+
+  return result;
+}
+
+// Step 3 — Confirm appears only for a valid, old-enough date.
+function updateDobStep() {
+  const result =
+    validateDob(
+      onbDobDay ? onbDobDay.value : "",
+      onbDobMonth ? onbDobMonth.value : "",
+      onbDobYear ? onbDobYear.value : ""
+    );
+
+  const showError =
+    !result.ok && !result.incomplete && !!result.error;
+
+  if (onbDobError) {
+    onbDobError.textContent =
+      showError ? result.error : "";
+
+    onbDobError.classList.toggle("hidden", !showError);
+  }
+
+  if (onbDobConfirm) {
+    onbDobConfirm.classList.toggle("hidden", !result.ok);
+  }
+
+  return result;
+}
+
+function completeOnboarding() {
+  const nameResult =
+    validateProfileName(
+      onbNameInput ? onbNameInput.value : ""
+    );
+
+  const dobResult =
+    validateDob(
+      onbDobDay ? onbDobDay.value : "",
+      onbDobMonth ? onbDobMonth.value : "",
+      onbDobYear ? onbDobYear.value : ""
+    );
+
+  // Never trust the buttons alone — check again.
+  if (!nameResult.ok || !dobResult.ok) return;
+
+  if (
+    !(onbTermsCheck && onbTermsCheck.checked) ||
+    !(onbPrivacyCheck && onbPrivacyCheck.checked)
+  ) {
+    showOnboardingStep("terms");
+    return;
+  }
+
+  saveProfile({
+    name: nameResult.value,
+    dob: dobResult.iso,
+    onboardingCompleted: true,
+    termsAcceptedAt: new Date().toISOString()
+  });
+
+  updateUserPanel();
+
+  showAppScreen();
+
+  if (!currentChatId) {
+    createNewChat(false);
+  }
+}
+
+// DOB boxes accept digits only and hop to the next box when full.
+function setupDobBox(input, nextInput, previousInput, length) {
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    input.value =
+      input.value.replace(/\D/g, "").slice(0, length);
+
+    if (
+      nextInput &&
+      input.value.length === length
+    ) {
+      nextInput.focus();
+    }
+
+    updateDobStep();
+  });
+
+  input.addEventListener("keydown", event => {
+    if (
+      event.key === "Backspace" &&
+      !input.value &&
+      previousInput
+    ) {
+      previousInput.focus();
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      if (
+        onbDobConfirm &&
+        !onbDobConfirm.classList.contains("hidden")
+      ) {
+        completeOnboarding();
+      }
+    }
+  });
+
+  // "5" becomes "05" when the person leaves the box
+  input.addEventListener("blur", () => {
+    if (length === 2 && input.value.length === 1) {
+      input.value = "0" + input.value;
+
+      updateDobStep();
+    }
+  });
+}
+
+function setupOnboarding() {
+  if (!onboardingScreen) return;
+
+  if (onbTermsCheck) {
+    onbTermsCheck.addEventListener("change", updateTermsStep);
+  }
+
+  if (onbPrivacyCheck) {
+    onbPrivacyCheck.addEventListener("change", updateTermsStep);
+  }
+
+  if (onbTermsNext) {
+    onbTermsNext.addEventListener("click", () => {
+      if (
+        onbTermsCheck.checked &&
+        onbPrivacyCheck.checked
+      ) {
+        showOnboardingStep("name");
+      }
+    });
+  }
+
+  if (onbNameInput) {
+    onbNameInput.addEventListener("input", updateNameStep);
+
+    onbNameInput.addEventListener("keydown", event => {
+      if (
+        event.key === "Enter" &&
+        updateNameStep().ok
+      ) {
+        event.preventDefault();
+
+        showOnboardingStep("dob");
+      }
+    });
+  }
+
+  if (onbNameNext) {
+    onbNameNext.addEventListener("click", () => {
+      if (updateNameStep().ok) {
+        showOnboardingStep("dob");
+      }
+    });
+  }
+
+  setupDobBox(onbDobDay, onbDobMonth, null, 2);
+  setupDobBox(onbDobMonth, onbDobYear, onbDobDay, 2);
+  setupDobBox(onbDobYear, null, onbDobMonth, 4);
+
+  if (onbDobConfirm) {
+    onbDobConfirm.addEventListener("click", completeOnboarding);
+  }
+
+  if (onbExitBtn) {
+    onbExitBtn.addEventListener("click", () => {
+      logout();
+    });
+  }
+}
+
+
+/* =========================================================
+   15c. SETTINGS -> ACCOUNT (copy email, edit name)
+   ========================================================= */
+
+let emailCopiedTimer = null;
+
+async function copyTextToClipboard(text) {
+  try {
+    if (
+      navigator.clipboard &&
+      navigator.clipboard.writeText
+    ) {
+      await navigator.clipboard.writeText(text);
+
+      return true;
+    }
+  } catch {
+    // fall through to the older method
+  }
+
+  try {
+    const area =
+      document.createElement("textarea");
+
+    area.value = text;
+
+    area.setAttribute("readonly", "");
+
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+
+    document.body.appendChild(area);
+
+    area.select();
+
+    const ok = document.execCommand("copy");
+
+    area.remove();
+
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function copyAccountEmail() {
+  if (isGuest || !currentUser || !currentUser.email) return;
+
+  const ok =
+    await copyTextToClipboard(currentUser.email);
+
+  if (accountEmailHint) {
+    accountEmailHint.textContent =
+      ok ? "Copied ✓" : "Couldn't copy";
+
+    clearTimeout(emailCopiedTimer);
+
+    emailCopiedTimer = setTimeout(() => {
+      accountEmailHint.textContent = "Click to copy";
+    }, 1800);
+  }
+}
+
+function updateNameEditorState() {
+  const result =
+    validateProfileName(
+      nameEditInput ? nameEditInput.value : ""
+    );
+
+  const changed =
+    result.value !== getProfileName();
+
+  if (nameEditError) {
+    nameEditError.textContent = result.error;
+
+    nameEditError.classList.toggle("hidden", !result.error);
+  }
+
+  if (nameEditSave) {
+    nameEditSave.disabled = !(result.ok && changed);
+  }
+
+  return result;
+}
+
+function openNameEditor() {
+  if (!nameEditScreen) return;
+
+  if (nameEditInput) {
+    nameEditInput.value = getProfileName();
+  }
+
+  updateNameEditorState();
+
+  nameEditScreen.classList.remove("hidden");
+
+  if (nameEditInput && nameEditInput.focus) {
+    setTimeout(() => nameEditInput.focus(), 80);
+  }
+}
+
+function closeNameEditor() {
+  if (nameEditScreen) {
+    nameEditScreen.classList.add("hidden");
+  }
+}
+
+function saveEditedName() {
+  const result = updateNameEditorState();
+
+  if (!result.ok) return;
+
+  // A name only exists after onboarding — stay safe if not.
+  if (!isProfileComplete(userProfile)) {
+    closeNameEditor();
+
+    return;
+  }
+
+  saveProfile(
+    Object.assign({}, userProfile, { name: result.value })
+  );
+
+  updateUserPanel();
+
+  closeNameEditor();
+
+  showToast("Name updated");
+}
+
+function setupAccountSettings() {
+  if (accountEmailBtn) {
+    accountEmailBtn.addEventListener("click", copyAccountEmail);
+  }
+
+  if (accountNameBtn) {
+    accountNameBtn.addEventListener("click", openNameEditor);
+  }
+
+  if (nameEditBack) {
+    nameEditBack.addEventListener("click", closeNameEditor);
+  }
+
+  if (nameEditSave) {
+    nameEditSave.addEventListener("click", saveEditedName);
+  }
+
+  if (nameEditInput) {
+    nameEditInput.addEventListener("input", updateNameEditorState);
+
+    nameEditInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+
+        if (nameEditSave && !nameEditSave.disabled) {
+          saveEditedName();
+        }
+      }
+    });
+  }
+
+  // Esc closes ONLY the name editor and goes back to Settings. It is
+  // registered in the capture phase and stops there, so the app-wide
+  // Esc handler (which closes Settings) never sees this key press.
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        nameEditScreen &&
+        !nameEditScreen.classList.contains("hidden")
+      ) {
+        event.stopPropagation();
+
+        closeNameEditor();
+      }
+    },
+    true
+  );
 }
 
 
@@ -1154,24 +1977,23 @@ function updateUserPanel() {
     return;
   }
 
+  const name =
+    getProfileName();
+
+  userName.textContent = name;
+
   if (isGuest || !currentUser) {
-    userName.textContent = "Guest";
     userEmail.textContent = "Not signed in";
 
-    userAvatar.innerHTML = "?";
+    if (userProfile && userProfile.name) {
+      userAvatar.textContent =
+        name.charAt(0).toUpperCase();
+    } else {
+      userAvatar.innerHTML = "?";
+    }
 
     return;
   }
-
-  const name =
-    currentUser.displayName ||
-    (
-      currentUser.email
-        ? currentUser.email.split("@")[0]
-        : "User"
-    );
-
-  userName.textContent = name;
 
   userEmail.textContent =
     currentUser.email || "";
@@ -1280,69 +2102,42 @@ function openLegalModal(type) {
    ========================================================= */
 
 function updateSettingsPanel() {
-  if (
-    !settingsAvatar ||
-    !settingsName ||
-    !settingsEmail
-  ) {
-    return;
-  }
+  const loggedIn =
+    !isGuest && !!currentUser;
 
-  if (isGuest || !currentUser) {
-    settingsName.textContent = "Guest";
-    settingsEmail.textContent = "Not signed in";
-
-    settingsAvatar.innerHTML = "?";
-
-    if (manageAccountBtn) {
-      manageAccountBtn.style.display = "none";
-    }
-
-    return;
-  }
-
-  const name =
-    currentUser.displayName ||
-    (
-      currentUser.email
-        ? currentUser.email.split("@")[0]
-        : "User"
+  // Email: shown (with "Click to copy") for signed-in users only.
+  if (accountEmailBtn) {
+    accountEmailBtn.classList.toggle(
+      "hidden",
+      !loggedIn || !currentUser.email
     );
-
-  settingsName.textContent = name;
-
-  settingsEmail.textContent =
-    currentUser.email || "";
-
-  if (currentUser.photoURL) {
-    settingsAvatar.innerHTML = "";
-
-    const img =
-      document.createElement("img");
-
-    img.src = currentUser.photoURL;
-    img.alt = "";
-
-    settingsAvatar.appendChild(img);
-
-  } else {
-    settingsAvatar.textContent =
-      name.charAt(0).toUpperCase();
   }
 
-  const isGoogleUser =
-    Array.isArray(currentUser.providerData) &&
-    currentUser.providerData.some(
-      provider => provider.providerId === "google.com"
-    );
+  if (accountEmailValue) {
+    accountEmailValue.textContent =
+      loggedIn ? (currentUser.email || "") : "";
+  }
 
-  if (manageAccountBtn) {
-    manageAccountBtn.style.display =
-      isGoogleUser ? "flex" : "none";
+  if (accountEmailHint) {
+    accountEmailHint.textContent = "Click to copy";
+  }
+
+  // Name: shown for everyone (guests have a name from onboarding too).
+  if (accountNameValue) {
+    accountNameValue.textContent =
+      getProfileName();
   }
 }
 
 function openSettingsModal() {
+  // Never open Settings behind the onboarding pages.
+  if (
+    onboardingScreen &&
+    !onboardingScreen.classList.contains("hidden")
+  ) {
+    return;
+  }
+
   updateSettingsPanel();
 
   if (memoryToggle) {
@@ -1351,15 +2146,6 @@ function openSettingsModal() {
 
   openModal(settingsModal);
 }
-
-function openManageGoogleAccount() {
-  window.open(
-    "https://myaccount.google.com/",
-    "_blank",
-    "noopener"
-  );
-}
-
 
 /* =========================================================
    17d. CUSTOMER SERVICE
@@ -2341,6 +3127,8 @@ function setupAuthListener() {
 
         await createUserDocument(user);
 
+        await loadUserProfile();
+
         updateUserPanel();
 
         showAppScreen();
@@ -2375,6 +3163,8 @@ function setupAuthListener() {
           purgeExpiredDeletedChats();
 
           loadMemoryLocal();
+
+          loadGuestProfile();
 
           updateUserPanel();
 
@@ -6398,6 +7188,11 @@ async function logout() {
     currentUser = null;
     isGuest = false;
 
+    // The next person to sign in goes through their own onboarding.
+    userProfile = null;
+
+    closeNameEditor();
+
     // This was the actual bug: signing out never cleared the
     // guest flag, so if someone had ever used Guest mode before,
     // that stale flag could stick around and interfere with a
@@ -6506,6 +7301,14 @@ async function deleteAccountPermanently() {
 
     currentUser = null;
     isGuest = false;
+
+    userProfile = null;
+
+    try {
+      localStorage.removeItem(PROFILE_LOCAL_PREFIX + uid);
+    } catch {}
+
+    closeNameEditor();
 
     localStorage.removeItem("hareKrishnaGuest");
 
@@ -7030,13 +7833,6 @@ function setupEventListeners() {
     );
   }
 
-  if (manageAccountBtn) {
-    manageAccountBtn.addEventListener(
-      "click",
-      openManageGoogleAccount
-    );
-  }
-
   if (settingsSignOutBtn) {
     settingsSignOutBtn.addEventListener(
       "click",
@@ -7243,6 +8039,10 @@ async function startApp() {
   loadTheme();
 
   setupEventListeners();
+
+  setupOnboarding();
+
+  setupAccountSettings();
 
   setupSuggestions();
 
