@@ -4082,3 +4082,404 @@ button:disabled {
 .message-feedback-inline.active-dislike {
   color: var(--danger);
 }
+
+/* =========================================================
+   ONBOARDING (terms -> name -> date of birth)
+   Reuses the login screen's look (.auth-screen / .auth-card).
+   ========================================================= */
+
+/* "Safe" centring: when the card is taller than the screen (small
+   phone, on-screen keyboard open) it starts at the top and scrolls,
+   instead of being centred with its top cut off and unreachable. */
+.onboarding-screen {
+  align-items: flex-start;
+}
+
+.onboarding-card {
+  margin: auto;
+
+  text-align: center;
+}
+
+.onb-step {
+  animation: onbStepIn .28s ease both;
+}
+
+@keyframes onbStepIn {
+  from {
+    opacity: 0;
+
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform: translateY(0);
+  }
+}
+
+/* STEP 1 — tick boxes */
+
+.onb-check {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 14px;
+
+  width: 100%;
+
+  margin: 0 0 12px;
+
+  padding: 15px 16px;
+
+  border: 1px solid var(--border);
+
+  border-radius: 14px;
+
+  background: var(--bg);
+
+  color: var(--text);
+
+  font-size: 15.5px;
+
+  line-height: 1.45;
+
+  text-align: left;
+
+  cursor: pointer;
+
+  transition:
+    border-color .18s ease,
+    background .18s ease;
+}
+
+.onb-check:hover {
+  border-color: var(--accent);
+}
+
+.onb-check input {
+  flex: 0 0 auto;
+
+  width: 22px;
+  height: 22px;
+
+  margin: 1px 0 0;
+
+  accent-color: var(--accent);
+
+  cursor: pointer;
+}
+
+.onb-check a {
+  color: var(--accent);
+
+  font-weight: 650;
+
+  text-decoration: underline;
+}
+
+.onb-hint {
+  margin: 4px 0 10px;
+
+  color: var(--muted);
+
+  font-size: 13.5px;
+}
+
+/* the Next / Confirm button slides in when it appears */
+
+.onb-next {
+  margin-top: 14px;
+
+  animation: onbNextIn .24s ease both;
+}
+
+@keyframes onbNextIn {
+  from {
+    opacity: 0;
+
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform: translateY(0);
+  }
+}
+
+/* STEP 2 / 3 — messages */
+
+.onb-error {
+  margin: 2px 2px 8px;
+
+  color: var(--danger);
+
+  font-size: 14px;
+
+  line-height: 1.45;
+
+  text-align: left;
+}
+
+/* STEP 3 — age note + date boxes */
+
+.onb-age-note {
+  margin: 14px 0 22px;
+
+  padding: 13px 15px;
+
+  border-radius: 14px;
+
+  background: var(--accent-soft);
+
+  color: var(--text);
+
+  font-size: 14.5px;
+
+  line-height: 1.55;
+
+  text-align: left;
+}
+
+body.dark .onb-age-note {
+  background: rgba(124, 114, 255, .14);
+}
+
+.onb-dob {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr 1.7fr;
+
+  gap: 10px;
+}
+
+.onb-dob .auth-input {
+  margin-bottom: 8px;
+
+  padding: 0 8px;
+
+  text-align: center;
+
+  font-size: 20px;
+
+  font-weight: 650;
+
+  letter-spacing: .04em;
+}
+
+.onb-dob .auth-input::placeholder {
+  font-weight: 500;
+
+  letter-spacing: .02em;
+}
+
+/* "Sign out" / "Back to login" link at the bottom */
+
+.onb-exit {
+  margin: 22px auto 0;
+
+  padding: 6px 10px;
+
+  border: 0;
+
+  background: transparent;
+
+  color: var(--muted);
+
+  font-size: 14px;
+
+  font-family: inherit;
+
+  text-decoration: underline;
+
+  cursor: pointer;
+}
+
+.onb-exit:hover {
+  color: var(--text);
+}
+
+@media (max-width: 520px) {
+  .onboarding-card {
+    padding: 34px 22px 28px;
+  }
+}
+
+
+/* =========================================================
+   SETTINGS -> ACCOUNT (Email / Name rows)
+   ========================================================= */
+
+.settings-item-two-line {
+  gap: 12px;
+
+  padding: 10px 4px;
+}
+
+.settings-item-two-line.hidden {
+  display: none !important;
+}
+
+.settings-item-text {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 2px;
+
+  min-width: 0;
+}
+
+.settings-item-label {
+  font-size: 14px;
+
+  font-weight: 600;
+}
+
+.settings-item-sub {
+  color: var(--muted);
+
+  font-size: 13px;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.settings-item-hint {
+  flex: 0 0 auto;
+
+  color: var(--accent);
+
+  font-size: 12.5px;
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   NAME EDITOR (full-screen page: Back top-left, Save top-right)
+   ========================================================= */
+
+.name-edit-screen {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 1500;
+
+  display: flex;
+
+  flex-direction: column;
+
+  background: var(--bg);
+
+  color: var(--text);
+
+  animation: nameEditIn .2s ease both;
+}
+
+@keyframes nameEditIn {
+  from {
+    opacity: 0;
+
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+
+    transform: translateY(0);
+  }
+}
+
+.name-edit-bar {
+  display: grid;
+
+  grid-template-columns: 1fr auto 1fr;
+
+  align-items: center;
+
+  padding: 12px 14px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+.name-edit-bar h2 {
+  margin: 0;
+
+  font-size: 17px;
+
+  font-weight: 700;
+
+  text-align: center;
+}
+
+.name-edit-bar-btn {
+  justify-self: start;
+
+  padding: 8px 10px;
+
+  border: 0;
+
+  border-radius: 10px;
+
+  background: transparent;
+
+  color: var(--text);
+
+  font-size: 16px;
+
+  font-weight: 600;
+
+  font-family: inherit;
+
+  cursor: pointer;
+}
+
+.name-edit-bar-btn:hover {
+  background: var(--panel-2);
+}
+
+.name-edit-save {
+  justify-self: end;
+
+  color: var(--accent);
+
+  font-weight: 700;
+}
+
+.name-edit-save:disabled {
+  opacity: .4;
+
+  cursor: not-allowed;
+}
+
+.name-edit-save:disabled:hover {
+  background: transparent;
+}
+
+.name-edit-body {
+  width: min(520px, 100%);
+
+  margin: 0 auto;
+
+  padding: 28px 20px;
+}
+
+.name-edit-label {
+  display: block;
+
+  margin: 0 0 8px 2px;
+
+  color: var(--muted);
+
+  font-size: 13px;
+
+  font-weight: 600;
+}
