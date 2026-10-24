@@ -182,6 +182,206 @@
        MAIN AI APPLICATION
        ===================================================== -->
 
+  <!-- =====================================================
+       ONBOARDING (shown once after the first login / guest start)
+       1. Terms + Privacy  ->  2. Name  ->  3. Date of birth
+       ===================================================== -->
+
+  <div id="onboardingScreen" class="auth-screen onboarding-screen hidden">
+
+    <div class="auth-card onboarding-card">
+
+      <div class="auth-logo" aria-hidden="true">
+        <span>✦</span>
+      </div>
+
+
+      <!-- STEP 1 · TERMS & PRIVACY -->
+
+      <section id="onbStepTerms" class="onb-step" aria-labelledby="onbTermsTitle">
+
+        <h1 id="onbTermsTitle" class="auth-title">Before you start</h1>
+
+        <p class="auth-subtitle">
+          Please read and accept our Terms and Privacy Policy to continue.
+        </p>
+
+        <label class="onb-check" for="onbTermsCheck">
+          <input type="checkbox" id="onbTermsCheck">
+          <span class="onb-check-text">
+            I agree to the
+            <a href="terms.html" target="_blank" rel="noopener">Terms and Conditions</a>
+          </span>
+        </label>
+
+        <label class="onb-check" for="onbPrivacyCheck">
+          <input type="checkbox" id="onbPrivacyCheck">
+          <span class="onb-check-text">
+            I have read and accept the
+            <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+          </span>
+        </label>
+
+        <p id="onbTermsHint" class="onb-hint hidden">
+          Please accept both to continue.
+        </p>
+
+        <button
+          id="onbTermsNext"
+          class="auth-primary-btn onb-next hidden"
+          type="button"
+          disabled>
+          Next
+        </button>
+
+      </section>
+
+
+      <!-- STEP 2 · NAME -->
+
+      <section id="onbStepName" class="onb-step hidden" aria-labelledby="onbNameTitle">
+
+        <h1 id="onbNameTitle" class="auth-title">What's your name?</h1>
+
+        <p class="auth-subtitle">
+          This is how Hare Krishna AI will know you.
+        </p>
+
+        <input
+          id="onbNameInput"
+          class="auth-input"
+          type="text"
+          maxlength="40"
+          placeholder="Enter your name"
+          autocomplete="name"
+          autocapitalize="words"
+          spellcheck="false"
+          aria-label="Your name">
+
+        <p id="onbNameError" class="onb-error hidden"></p>
+
+        <button
+          id="onbNameNext"
+          class="auth-primary-btn onb-next hidden"
+          type="button">
+          Next
+        </button>
+
+      </section>
+
+
+      <!-- STEP 3 · DATE OF BIRTH -->
+
+      <section id="onbStepDob" class="onb-step hidden" aria-labelledby="onbDobTitle">
+
+        <h1 id="onbDobTitle" class="auth-title">Confirm your age</h1>
+
+        <p id="onbAgeNote" class="onb-age-note">
+          You must be at least 13 years old to use Hare Krishna AI.
+          If you're under 18, you need your parent or guardian's permission.
+        </p>
+
+        <div class="onb-dob" role="group" aria-label="Date of birth">
+
+          <input
+            id="onbDobDay"
+            class="auth-input onb-dob-input"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="2"
+            placeholder="DD"
+            autocomplete="off"
+            aria-label="Day of birth">
+
+          <input
+            id="onbDobMonth"
+            class="auth-input onb-dob-input"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="2"
+            placeholder="MM"
+            autocomplete="off"
+            aria-label="Month of birth">
+
+          <input
+            id="onbDobYear"
+            class="auth-input onb-dob-input onb-dob-year"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="4"
+            placeholder="YYYY"
+            autocomplete="off"
+            aria-label="Year of birth">
+
+        </div>
+
+        <p id="onbDobError" class="onb-error hidden"></p>
+
+        <button
+          id="onbDobConfirm"
+          class="auth-primary-btn onb-next hidden"
+          type="button">
+          Confirm
+        </button>
+
+      </section>
+
+
+      <button id="onbExitBtn" class="onb-exit" type="button">
+        Sign out
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- NAME EDITOR (opened from Settings -> Account -> Name) -->
+
+  <div
+    id="nameEditScreen"
+    class="name-edit-screen hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="nameEditTitle">
+
+    <div class="name-edit-bar">
+
+      <button id="nameEditBack" class="name-edit-bar-btn" type="button">
+        ‹ Back
+      </button>
+
+      <h2 id="nameEditTitle">Name</h2>
+
+      <button id="nameEditSave" class="name-edit-bar-btn name-edit-save" type="button" disabled>
+        Save
+      </button>
+
+    </div>
+
+    <div class="name-edit-body">
+
+      <label for="nameEditInput" class="name-edit-label">Your name</label>
+
+      <input
+        id="nameEditInput"
+        class="auth-input"
+        type="text"
+        maxlength="40"
+        autocomplete="name"
+        autocapitalize="words"
+        spellcheck="false">
+
+      <p id="nameEditError" class="onb-error hidden"></p>
+
+    </div>
+
+  </div>
+
+
   <div id="appScreen" class="app hidden">
 
     <!-- SIDEBAR -->
@@ -536,7 +736,7 @@
 
 
           <h1>
-            How can I help you?
+            Hare Krishna
           </h1>
 
 
@@ -747,41 +947,53 @@
           </div>
 
 
-          <div class="settings-row">
-
-            <div
-              id="settingsAvatar"
-              class="settings-row-avatar">
-              ?
-            </div>
-
-
-            <div class="settings-row-text">
-
-              <div
-                id="settingsName"
-                class="settings-row-title">
-                Guest
-              </div>
-
-              <div
-                id="settingsEmail"
-                class="settings-row-sub">
-                Not signed in
-              </div>
-
-            </div>
-
-          </div>
-
+          <!-- Email (signed-in users only) -->
 
           <button
-            class="settings-item"
-            id="manageAccountBtn"
+            class="settings-item settings-item-two-line hidden"
+            id="accountEmailBtn"
             type="button">
 
-            <span>
-              Manage Google Account
+            <span class="settings-item-text">
+
+              <span class="settings-item-label">
+                Email
+              </span>
+
+              <span
+                id="accountEmailValue"
+                class="settings-item-sub">
+              </span>
+
+            </span>
+
+            <span
+              id="accountEmailHint"
+              class="settings-item-hint">
+              Click to copy
+            </span>
+
+          </button>
+
+
+          <!-- Name -->
+
+          <button
+            class="settings-item settings-item-two-line"
+            id="accountNameBtn"
+            type="button">
+
+            <span class="settings-item-text">
+
+              <span class="settings-item-label">
+                Name
+              </span>
+
+              <span
+                id="accountNameValue"
+                class="settings-item-sub">
+              </span>
+
             </span>
 
             <span class="settings-item-arrow">
