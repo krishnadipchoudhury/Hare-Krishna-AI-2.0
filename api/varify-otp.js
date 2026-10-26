@@ -8,7 +8,7 @@ async function readBody(request) {
   let text = "";
 
   for await (const chunk of request) text += chunk.toString();
-
+ 
   try {
     return text ? JSON.parse(text) : {};
   } catch {
