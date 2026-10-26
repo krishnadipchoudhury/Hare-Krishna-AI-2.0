@@ -605,6 +605,25 @@ const nameEditSave = $("nameEditSave");
 const nameEditInput = $("nameEditInput");
 const nameEditError = $("nameEditError");
 
+// Startup splash, email-code (OTP) page, in-app Terms/Privacy viewer
+const bootSplash = $("bootSplash");
+const otpScreen = $("otpScreen");
+const otpBackBtn = $("otpBackBtn");
+const otpEmailText = $("otpEmailText");
+const otpBoxes = $("otpBoxes");
+const otpMessage = $("otpMessage");
+const otpVerifyBtn = $("otpVerifyBtn");
+const otpResendBtn = $("otpResendBtn");
+const otpResendText = $("otpResendText");
+const otpChangeEmailBtn = $("otpChangeEmailBtn");
+const legalSheet = $("legalSheet");
+const legalSheetBack = $("legalSheetBack");
+const legalSheetTitle = $("legalSheetTitle");
+const legalSheetOpen = $("legalSheetOpen");
+const legalSheetFrame = $("legalSheetFrame");
+const onbTermsLink = $("onbTermsLink");
+const onbPrivacyLink = $("onbPrivacyLink");
+
 // Onboarding (terms -> name -> date of birth)
 const onboardingScreen = $("onboardingScreen");
 const onbStepTerms = $("onbStepTerms");
@@ -781,7 +800,23 @@ function getAuthErrorMessage(error) {
    9. SHOW AUTH SCREEN
    ========================================================= */
 
+function hideBootSplash() {
+  if (bootSplash) {
+    bootSplash.classList.add("hidden");
+  }
+}
+
+function hideOtpScreen() {
+  if (otpScreen) {
+    otpScreen.classList.add("hidden");
+  }
+}
+
 function showAuthScreen() {
+  hideBootSplash();
+
+  hideOtpScreen();
+
   if (authScreen) {
     authScreen.classList.remove("hidden");
   }
@@ -809,6 +844,10 @@ function showAppScreen() {
     showOnboarding();
     return;
   }
+
+  hideBootSplash();
+
+  hideOtpScreen();
 
   if (authScreen) {
     authScreen.classList.add("hidden");
@@ -941,6 +980,15 @@ async function signInWithEmail() {
     return;
   }
 
+  if (!isValidEmailFormat(email)) {
+    setAuthMessage(
+      "Please enter a valid email address, like name@example.com.",
+      "error"
+    );
+    emailInput.focus();
+    return;
+  }
+
   if (!password) {
     setAuthMessage("Please enter your password.", "error");
     passwordInput.focus();
@@ -981,6 +1029,65 @@ async function signInWithEmail() {
    13. CREATE ACCOUNT
    ========================================================= */
 
+// Set to false to skip the email-code step (accounts are created
+// straight away, as before).
+const REQUIRE_EMAIL_OTP = true;
+
+// Same rule the server uses (api/send-otp.js): a real-looking address,
+// something@domain.tld — no spaces, no double dots, a proper ending.
+const EMAIL_PATTERN =
+  /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+function isValidEmailFormat(value) {
+  const email = String(value || "").trim().toLowerCase();
+
+  if (email.length > 254 || !EMAIL_PATTERN.test(email)) return false;
+
+  const [local, domain] = email.split("@");
+
+  if (local.length > 64) return false;
+
+  if (
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..")
+  ) {
+    return false;
+  }
+
+  return /^[a-z]{2,24}$/.test(domain.split(".").pop());
+}
+
+// Typing "gmial.com" is the most common reason a code never arrives.
+const COMMON_EMAIL_TYPOS = {
+  "gmial.com": "gmail.com",
+  "gmai.com": "gmail.com",
+  "gmail.con": "gmail.com",
+  "gamil.com": "gmail.com",
+  "gmal.com": "gmail.com",
+  "gnail.com": "gmail.com",
+  "gmail.cm": "gmail.com",
+  "yaho.com": "yahoo.com",
+  "yahooo.com": "yahoo.com",
+  "yahoo.con": "yahoo.com",
+  "hotmial.com": "hotmail.com",
+  "hotmail.con": "hotmail.com",
+  "outlok.com": "outlook.com",
+  "outlook.con": "outlook.com",
+  "iclod.com": "icloud.com",
+  "icloud.con": "icloud.com"
+};
+
+function suggestEmailFix(email) {
+  const parts = String(email).split("@");
+
+  const fixed = COMMON_EMAIL_TYPOS[parts[1]];
+
+  return fixed ? parts[0] + "@" + fixed : null;
+}
+
+let emailTypoWarnedFor = "";
+
 async function createAccount() {
   if (!firebaseReady) {
     setAuthMessage(
@@ -990,11 +1097,36 @@ async function createAccount() {
     return;
   }
 
-  const email = emailInput.value.trim();
+  const email = emailInput.value.trim().toLowerCase();
   const password = passwordInput.value;
 
   if (!email) {
     setAuthMessage("Enter an email address first.", "error");
+    emailInput.focus();
+    return;
+  }
+
+  if (!isValidEmailFormat(email)) {
+    setAuthMessage(
+      "Please enter a valid email address, like name@example.com.",
+      "error"
+    );
+    emailInput.focus();
+    return;
+  }
+
+  // One gentle "did you mean…?" before sending a code to a likely typo.
+  const fix = suggestEmailFix(email);
+
+  if (fix && emailTypoWarnedFor !== email) {
+    emailTypoWarnedFor = email;
+
+    setAuthMessage(
+      "Did you mean " + fix + "? Fix it, or tap Create account again to use " +
+        email + " anyway.",
+      "error"
+    );
+
     emailInput.focus();
     return;
   }
@@ -1013,6 +1145,16 @@ async function createAccount() {
     return;
   }
 
+  if (!REQUIRE_EMAIL_OTP) {
+    await finishCreateAccount(email, password);
+    return;
+  }
+
+  await startEmailOtp(email, password);
+}
+
+// The account itself — only reached once the email is verified.
+async function finishCreateAccount(email, password) {
   try {
     createAccountBtn.disabled = true;
 
@@ -1036,6 +1178,12 @@ async function createAccount() {
       await createUserDocument(user);
     }
 
+    // Keep the green "verified" boxes on screen until the app takes
+    // over (the sign-in listener hides this page) — only drop the data.
+    stopResendTimer();
+
+    otpState = null;
+
     setAuthMessage(
       "Account created successfully!",
       "success"
@@ -1044,6 +1192,11 @@ async function createAccount() {
   } catch (error) {
     console.error("Create account error:", error);
 
+    // Back to the login page so the message can be read there.
+    resetOtpState();
+
+    showAuthScreen();
+
     setAuthMessage(
       getAuthErrorMessage(error),
       "error"
@@ -1051,6 +1204,548 @@ async function createAccount() {
 
   } finally {
     createAccountBtn.disabled = false;
+  }
+}
+
+
+/* =========================================================
+   13b. EMAIL VERIFICATION CODE (OTP)
+   =========================================================
+   "Create account" -> check the email -> a 6-digit code is sent
+   to it (api/send-otp.js) -> the person types it on the code page
+   (api/verify-otp.js) -> only then is the account created.
+   Needs OTP_SECRET, RESEND_API_KEY and OTP_FROM_EMAIL on Vercel.
+   ========================================================= */
+
+const OTP_LENGTH = 6;
+
+let otpState = null;
+
+let otpResendTimer = null;
+
+function maskEmail(email) {
+  const [local, domain] = String(email).split("@");
+
+  return (local.charAt(0) || "") + "***@" + (domain || "");
+}
+
+function setOtpMessage(text, type) {
+  if (!otpMessage) return;
+
+  otpMessage.textContent = text || "";
+
+  otpMessage.className =
+    "otp-message" + (type ? " " + type : "");
+}
+
+// The six boxes you SEE are plain display cells. One real (invisible)
+// input sits on top of them and receives everything: typing, deleting,
+// pasting, and the phone's "code from email / SMS" autofill. This is the
+// pattern most modern apps use — separate inputs break Backspace on many
+// Android keyboards and autofill on iPhones.
+let otpInput = null;
+
+let otpFocused = false;
+
+function getOtpBoxList() {
+  return otpBoxes
+    ? Array.from(otpBoxes.children).filter(
+        child => child.classList.contains("otp-box")
+      )
+    : [];
+}
+
+function getOtpCode() {
+  return otpInput ? otpInput.value : "";
+}
+
+// Draws the typed digits into the six cells.
+function renderOtpBoxes() {
+  const code = getOtpCode();
+
+  const active = Math.min(code.length, OTP_LENGTH - 1);
+
+  getOtpBoxList().forEach((box, i) => {
+    box.textContent = code.charAt(i);
+
+    box.classList.toggle("filled", i < code.length);
+
+    box.classList.toggle("active", otpFocused && i === active);
+  });
+}
+
+function clearOtpBoxes(focusInput) {
+  if (otpInput) otpInput.value = "";
+
+  getOtpBoxList().forEach(box => {
+    box.classList.remove("error", "success");
+  });
+
+  renderOtpBoxes();
+
+  if (otpVerifyBtn) otpVerifyBtn.disabled = true;
+
+  if (focusInput && otpInput && otpInput.focus) otpInput.focus();
+}
+
+function setOtpBoxesLocked(locked) {
+  if (!otpInput) return;
+
+  otpInput.disabled = locked;
+
+  if (locked) {
+    // a disabled input does not report losing focus
+    otpFocused = false;
+
+    renderOtpBoxes();
+  }
+}
+
+function stopResendTimer() {
+  if (otpResendTimer) {
+    clearInterval(otpResendTimer);
+
+    otpResendTimer = null;
+  }
+}
+
+// "Resend in 0:27" counting down, then a "Resend code" button.
+function startResendTimer(seconds) {
+  stopResendTimer();
+
+  const until = Date.now() + seconds * 1000;
+
+  const tick = () => {
+    const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+
+    if (!otpResendBtn) return;
+
+    if (left > 0) {
+      otpResendBtn.disabled = true;
+
+      otpResendBtn.textContent =
+        "Resend in 0:" + String(left).padStart(2, "0");
+
+    } else {
+      otpResendBtn.disabled = false;
+
+      otpResendBtn.textContent = "Resend code";
+
+      stopResendTimer();
+    }
+  };
+
+  tick();
+
+  if (seconds > 0) {
+    otpResendTimer = setInterval(tick, 1000);
+  }
+}
+
+function resetOtpState() {
+  stopResendTimer();
+
+  otpState = null;
+
+  setOtpBoxesLocked(false);
+
+  clearOtpBoxes(false);
+
+  setOtpMessage("");
+}
+
+function buildOtpBoxes() {
+  if (!otpBoxes || otpBoxes.children.length) return;
+
+  for (let i = 0; i < OTP_LENGTH; i++) {
+    const cell = document.createElement("div");
+
+    cell.className = "otp-box";
+
+    cell.setAttribute("aria-hidden", "true");
+
+    otpBoxes.appendChild(cell);
+  }
+
+  const input = document.createElement("input");
+
+  input.type = "text";
+
+  input.className = "otp-input";
+
+  input.setAttribute("inputmode", "numeric");
+  input.setAttribute("pattern", "[0-9]*");
+  input.setAttribute("enterkeyhint", "done");
+  input.setAttribute("aria-label", "6-digit verification code");
+  input.setAttribute("autocapitalize", "off");
+  input.setAttribute("autocorrect", "off");
+  input.setAttribute("spellcheck", "false");
+
+  // lets the phone offer the code from the email / SMS keyboard bar
+  input.setAttribute("autocomplete", "one-time-code");
+
+  // Anything that arrives — a typed digit, a pasted "123 456", an
+  // autofilled code — is reduced to digits and cut to six.
+  input.addEventListener("input", () => {
+    const digits =
+      input.value.replace(/\D/g, "").slice(0, OTP_LENGTH);
+
+    if (input.value !== digits) input.value = digits;
+
+    onOtpChanged();
+  });
+
+  input.addEventListener("paste", event => {
+    const pasted =
+      (event.clipboardData && event.clipboardData.getData("text")) || "";
+
+    const digits =
+      pasted.replace(/\D/g, "").slice(0, OTP_LENGTH);
+
+    event.preventDefault();
+
+    if (!digits) return;
+
+    input.value = digits;
+
+    onOtpChanged();
+  });
+
+  input.addEventListener("keydown", event => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+
+      verifyOtp();
+    }
+  });
+
+  input.addEventListener("focus", () => {
+    otpFocused = true;
+
+    renderOtpBoxes();
+  });
+
+  input.addEventListener("blur", () => {
+    otpFocused = false;
+
+    renderOtpBoxes();
+  });
+
+  otpBoxes.appendChild(input);
+
+  otpInput = input;
+}
+
+// Called after every change to the code.
+function onOtpChanged() {
+  renderOtpBoxes();
+
+  getOtpBoxList().forEach(box => box.classList.remove("error"));
+
+  const code = getOtpCode();
+
+  if (otpVerifyBtn) otpVerifyBtn.disabled = code.length !== OTP_LENGTH;
+
+  if (code.length === OTP_LENGTH) {
+    verifyOtp();
+  } else if (otpMessage && otpMessage.classList.contains("error")) {
+    setOtpMessage("");
+  }
+}
+
+function showOtpScreen() {
+  hideBootSplash();
+
+  if (authScreen) authScreen.classList.add("hidden");
+
+  if (onboardingScreen) onboardingScreen.classList.add("hidden");
+
+  if (appScreen) appScreen.classList.add("hidden");
+
+  if (otpEmailText && otpState) {
+    otpEmailText.textContent = maskEmail(otpState.email);
+  }
+
+  buildOtpBoxes();
+
+  setOtpBoxesLocked(false);
+
+  clearOtpBoxes(false);
+
+  setOtpMessage("");
+
+  if (otpScreen) otpScreen.classList.remove("hidden");
+
+  setTimeout(() => {
+    if (otpInput && otpInput.focus) otpInput.focus();
+  }, 80);
+}
+
+// Asks the server to email a code. { ok, token, resendAfter } or { ok:false, message }
+async function requestOtp(email) {
+  let response;
+  let data = {};
+
+  try {
+    response = await fetch("/api/send-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+
+    data = await response.json().catch(() => ({}));
+
+  } catch {
+    return {
+      ok: false,
+      message:
+        "Couldn't reach the server. Check your connection and try again."
+    };
+  }
+
+  if (response.ok && data && data.ok && data.token) {
+    return {
+      ok: true,
+      token: data.token,
+      resendAfter: Number(data.resendAfter) || 30
+    };
+  }
+
+  const messages = {
+    invalid_email:
+      "Please enter a valid email address, like name@example.com.",
+    too_soon:
+      "Please wait " + ((data && data.retryAfter) || 30) +
+      " seconds before asking for another code.",
+    too_many:
+      "Too many codes requested. Please try again in a few minutes.",
+    otp_not_configured:
+      "Email verification isn't available right now. Please try again later."
+  };
+
+  return {
+    ok: false,
+    message:
+      messages[data && data.error] ||
+      "We couldn't send the code. Please check the email address and try again."
+  };
+}
+
+async function startEmailOtp(email, password) {
+  try {
+    createAccountBtn.disabled = true;
+
+    // Don't send a code to an address that already has an account.
+    try {
+      if (typeof auth.fetchSignInMethodsForEmail === "function") {
+        const methods = await auth.fetchSignInMethodsForEmail(email);
+
+        if (methods && methods.length) {
+          setAuthMessage(
+            "An account with this email already exists. Please sign in instead.",
+            "error"
+          );
+
+          return;
+        }
+      }
+    } catch {
+      // not available (email-enumeration protection) — carry on
+    }
+
+    setAuthMessage("Sending code...");
+
+    const sent = await requestOtp(email);
+
+    if (!sent.ok) {
+      setAuthMessage(sent.message, "error");
+
+      return;
+    }
+
+    setAuthMessage("");
+
+    otpState = {
+      email,
+      password,
+      token: sent.token,
+      verifying: false
+    };
+
+    showOtpScreen();
+
+    startResendTimer(sent.resendAfter);
+
+  } finally {
+    createAccountBtn.disabled = false;
+  }
+}
+
+async function verifyOtp() {
+  if (!otpState || otpState.verifying) return;
+
+  const code = getOtpCode();
+
+  if (code.length !== OTP_LENGTH) return;
+
+  otpState.verifying = true;
+
+  setOtpBoxesLocked(true);
+
+  if (otpVerifyBtn) otpVerifyBtn.disabled = true;
+
+  setOtpMessage("Verifying…");
+
+  let response;
+  let data = {};
+
+  try {
+    response = await fetch("/api/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: otpState.email,
+        code,
+        token: otpState.token
+      })
+    });
+
+    data = await response.json().catch(() => ({}));
+
+  } catch {
+    otpState.verifying = false;
+
+    setOtpBoxesLocked(false);
+
+    if (otpVerifyBtn) otpVerifyBtn.disabled = false;
+
+    setOtpMessage(
+      "Couldn't reach the server. Check your connection and try again.",
+      "error"
+    );
+
+    return;
+  }
+
+  if (response.ok && data && data.ok) {
+    getOtpBoxList().forEach(box => box.classList.add("success"));
+
+    setOtpMessage("Email verified ✓", "success");
+
+    stopResendTimer();
+
+    const { email, password } = otpState;
+
+    // a short moment so the green "verified" state is seen
+    await delay(600);
+
+    await finishCreateAccount(email, password);
+
+    return;
+  }
+
+  // ---- not accepted ----
+
+  otpState.verifying = false;
+
+  setOtpBoxesLocked(false);
+
+  const reason = data && data.reason;
+
+  if (reason === "wrong_code") {
+    getOtpBoxList().forEach(box => box.classList.add("error"));
+
+    setOtpMessage(
+      "That code isn't right. Please check it and try again.",
+      "error"
+    );
+
+    // shake, then clear so the next try starts fresh
+    setTimeout(() => clearOtpBoxes(true), 450);
+
+    return;
+  }
+
+  clearOtpBoxes(true);
+
+  if (reason === "expired") {
+    setOtpMessage(
+      "This code has expired. Tap Resend code to get a new one.",
+      "error"
+    );
+
+    startResendTimer(0);
+
+  } else if (reason === "too_many_tries") {
+    setOtpMessage(
+      "Too many wrong tries. Tap Resend code to get a new one.",
+      "error"
+    );
+
+    startResendTimer(0);
+
+  } else {
+    setOtpMessage(
+      "Something went wrong. Please go back and try again.",
+      "error"
+    );
+  }
+}
+
+async function resendOtp() {
+  if (!otpState || otpState.verifying) return;
+
+  if (otpResendBtn) otpResendBtn.disabled = true;
+
+  setOtpMessage("Sending a new code…");
+
+  const sent = await requestOtp(otpState.email);
+
+  if (!sent.ok) {
+    setOtpMessage(sent.message, "error");
+
+    startResendTimer(10);
+
+    return;
+  }
+
+  otpState.token = sent.token;
+
+  clearOtpBoxes(true);
+
+  setOtpMessage("A new code is on its way.", "success");
+
+  startResendTimer(sent.resendAfter);
+}
+
+// Back arrow / "Wrong email? Change it": return to the login page.
+function cancelOtp() {
+  resetOtpState();
+
+  showAuthScreen();
+
+  setAuthMessage("");
+
+  if (emailInput && emailInput.focus) emailInput.focus();
+}
+
+function setupOtp() {
+  buildOtpBoxes();
+
+  if (otpVerifyBtn) {
+    otpVerifyBtn.addEventListener("click", verifyOtp);
+  }
+
+  if (otpResendBtn) {
+    otpResendBtn.addEventListener("click", resendOtp);
+  }
+
+  if (otpBackBtn) {
+    otpBackBtn.addEventListener("click", cancelOtp);
+  }
+
+  if (otpChangeEmailBtn) {
+    otpChangeEmailBtn.addEventListener("click", cancelOtp);
   }
 }
 
@@ -1453,6 +2148,160 @@ function validateDob(dayText, monthText, yearText, now) {
 }
 
 
+/* ---------- saved progress (survives reload / leaving the page) ---------- */
+
+const ONB_DRAFT_PREFIX = "hareKrishnaOnboardingDraft:";
+
+function onboardingDraftKey() {
+  return (
+    ONB_DRAFT_PREFIX +
+    (isGuest || !currentUser ? "guest" : currentUser.uid)
+  );
+}
+
+function saveOnboardingDraft() {
+  if (!onboardingScreen) return;
+
+  try {
+    localStorage.setItem(
+      onboardingDraftKey(),
+      JSON.stringify({
+        step: onboardingStep,
+        terms: !!(onbTermsCheck && onbTermsCheck.checked),
+        privacy: !!(onbPrivacyCheck && onbPrivacyCheck.checked),
+        name: onbNameInput ? onbNameInput.value : "",
+        day: onbDobDay ? onbDobDay.value : "",
+        month: onbDobMonth ? onbDobMonth.value : "",
+        year: onbDobYear ? onbDobYear.value : "",
+        savedAt: Date.now()
+      })
+    );
+  } catch {}
+}
+
+function readOnboardingDraft() {
+  try {
+    const raw = localStorage.getItem(onboardingDraftKey());
+
+    if (!raw) return null;
+
+    const draft = JSON.parse(raw);
+
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+
+    if (
+      !draft ||
+      typeof draft !== "object" ||
+      Date.now() - (Number(draft.savedAt) || 0) > THIRTY_DAYS
+    ) {
+      return null;
+    }
+
+    const text = value => String(value == null ? "" : value);
+
+    return {
+      step: text(draft.step),
+      terms: !!draft.terms,
+      privacy: !!draft.privacy,
+      name: text(draft.name).slice(0, 40),
+      day: text(draft.day).replace(/\D/g, "").slice(0, 2),
+      month: text(draft.month).replace(/\D/g, "").slice(0, 2),
+      year: text(draft.year).replace(/\D/g, "").slice(0, 4)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearOnboardingDraft() {
+  try {
+    localStorage.removeItem(onboardingDraftKey());
+  } catch {}
+}
+
+// Never jump ahead of what is actually allowed.
+function resolveDraftStep(draft) {
+  if (!draft || !draft.terms || !draft.privacy) return "terms";
+
+  if (draft.step === "dob") {
+    return validateProfileName(draft.name).ok ? "dob" : "name";
+  }
+
+  return draft.step === "name" ? "name" : "terms";
+}
+
+
+/* ---------- Terms / Privacy viewer ----------
+   Opens on top of the onboarding page instead of taking the person
+   to another page, so nothing is lost and there is no reload. */
+
+const LEGAL_PAGES = {
+  terms: { title: "Terms and Conditions", url: "terms.html" },
+  privacy: { title: "Privacy Policy", url: "privacy.html" }
+};
+
+function openLegalSheet(kind) {
+  const page = LEGAL_PAGES[kind];
+
+  if (!page || !legalSheet) return;
+
+  if (legalSheetTitle) legalSheetTitle.textContent = page.title;
+
+  if (legalSheetOpen) legalSheetOpen.setAttribute("href", page.url);
+
+  if (legalSheetFrame) legalSheetFrame.setAttribute("src", page.url);
+
+  legalSheet.classList.remove("hidden");
+}
+
+function closeLegalSheet() {
+  if (!legalSheet) return;
+
+  legalSheet.classList.add("hidden");
+
+  if (legalSheetFrame) {
+    legalSheetFrame.setAttribute("src", "about:blank");
+  }
+}
+
+function setupLegalSheet() {
+  const bind = (link, kind) => {
+    if (!link) return;
+
+    link.addEventListener("click", event => {
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      openLegalSheet(kind);
+    });
+  };
+
+  bind(onbTermsLink, "terms");
+  bind(onbPrivacyLink, "privacy");
+
+  if (legalSheetBack) {
+    legalSheetBack.addEventListener("click", closeLegalSheet);
+  }
+
+  document.addEventListener(
+    "keydown",
+    event => {
+      if (
+        event.key === "Escape" &&
+        legalSheet &&
+        !legalSheet.classList.contains("hidden")
+      ) {
+        event.stopPropagation();
+
+        closeLegalSheet();
+      }
+    },
+    true
+  );
+}
+
+
 /* ---------- the three pages ---------- */
 
 function showOnboardingStep(step) {
@@ -1480,9 +2329,19 @@ function showOnboardingStep(step) {
   if (target && target.focus) {
     setTimeout(() => target.focus(), 60);
   }
+
+  saveOnboardingDraft();
 }
 
 function showOnboarding() {
+  // What the person had already done (ticked boxes, typed name) before
+  // the page was reloaded, closed, or left to read the Terms.
+  const draft = readOnboardingDraft();
+
+  hideBootSplash();
+
+  hideOtpScreen();
+
   if (authScreen) authScreen.classList.add("hidden");
   if (appScreen) appScreen.classList.add("hidden");
 
@@ -1496,19 +2355,19 @@ function showOnboarding() {
       isGuest || !currentUser ? "Back to login" : "Sign out";
   }
 
-  // Always starts from page 1 with nothing pre-ticked.
-  if (onbTermsCheck) onbTermsCheck.checked = false;
-  if (onbPrivacyCheck) onbPrivacyCheck.checked = false;
-  if (onbNameInput) onbNameInput.value = "";
-  if (onbDobDay) onbDobDay.value = "";
-  if (onbDobMonth) onbDobMonth.value = "";
-  if (onbDobYear) onbDobYear.value = "";
+  // Fresh start, unless there is saved progress to come back to.
+  if (onbTermsCheck) onbTermsCheck.checked = !!(draft && draft.terms);
+  if (onbPrivacyCheck) onbPrivacyCheck.checked = !!(draft && draft.privacy);
+  if (onbNameInput) onbNameInput.value = draft ? draft.name : "";
+  if (onbDobDay) onbDobDay.value = draft ? draft.day : "";
+  if (onbDobMonth) onbDobMonth.value = draft ? draft.month : "";
+  if (onbDobYear) onbDobYear.value = draft ? draft.year : "";
 
   updateTermsStep();
   updateNameStep();
   updateDobStep();
 
-  showOnboardingStep("terms");
+  showOnboardingStep(resolveDraftStep(draft));
 }
 
 // Step 1 — the Next button appears as soon as a box is ticked, and
@@ -1528,6 +2387,8 @@ function updateTermsStep() {
   if (onbTermsHint) {
     onbTermsHint.classList.toggle("hidden", !(any && !both));
   }
+
+  saveOnboardingDraft();
 }
 
 // Step 2 — Next stays hidden until a valid name has been typed.
@@ -1546,6 +2407,8 @@ function updateNameStep() {
 
     onbNameError.classList.toggle("hidden", !result.error);
   }
+
+  saveOnboardingDraft();
 
   return result;
 }
@@ -1572,6 +2435,8 @@ function updateDobStep() {
   if (onbDobConfirm) {
     onbDobConfirm.classList.toggle("hidden", !result.ok);
   }
+
+  saveOnboardingDraft();
 
   return result;
 }
@@ -1606,6 +2471,9 @@ function completeOnboarding() {
     onboardingCompleted: true,
     termsAcceptedAt: new Date().toISOString()
   });
+
+  // Done for good — the saved progress is no longer needed.
+  clearOnboardingDraft();
 
   updateUserPanel();
 
@@ -1666,6 +2534,8 @@ function setupDobBox(input, nextInput, previousInput, length) {
 }
 
 function setupOnboarding() {
+  setupLegalSheet();
+
   if (!onboardingScreen) return;
 
   if (onbTermsCheck) {
@@ -1772,10 +2642,12 @@ async function copyTextToClipboard(text) {
 }
 
 async function copyAccountEmail() {
-  if (isGuest || !currentUser || !currentUser.email) return;
+  const email = getAccountEmail();
+
+  if (!email) return;
 
   const ok =
-    await copyTextToClipboard(currentUser.email);
+    await copyTextToClipboard(email);
 
   if (accountEmailHint) {
     accountEmailHint.textContent =
@@ -1905,6 +2777,91 @@ function setupAccountSettings() {
     },
     true
   );
+}
+
+
+/* =========================================================
+   15d. ACCOUNT DETAILS FOR THE AI
+   =========================================================
+   The AI can answer "what is my name / email / date of birth /
+   how old am I". To keep personal data minimal, the details are
+   sent ONLY with a message that actually asks about them — never
+   with ordinary questions — and such a question is answered
+   straight from the account (no web search, no shared cache).
+   ========================================================= */
+
+const PROFILE_QUESTION_REGEX =
+  new RegExp(
+    [
+      // "what is my name", "my email id", "my date of birth", "my age"
+      // (the word right after "my" — so "my dog's name" does not count)
+      "\\b(?:my|mine)\\s+(?:own\\s+|full\\s+|real\\s+|current\\s+|exact\\s+)?(?:name|e-?mail(?:\\s+(?:id|address))?|mail\\s*id|dob|d\\.o\\.b|date\\s+of\\s+birth|birth\\s*date|birthday|birth\\s*day|age)\\b",
+      "\\bhow\\s+old\\s+am\\s+i\\b",
+      "\\bwhen\\s+(?:was\\s+i\\s+born|is\\s+my\\s+birthday)\\b",
+      "\\bwho\\s+am\\s+i\\b",
+      "\\bwhat\\s+do\\s+you\\s+know\\s+about\\s+me\\b",
+      "\\bam\\s+i\\s+(?:under|over|above|below|older|younger)\\b",
+      "\\b(?:which|what)\\s+(?:e-?mail|mail)\\s+(?:am\\s+i|did\\s+i)\\b",
+      // Hinglish
+      "\\b(?:mera|meri|mere)\\s+(?:naam|nam|name|email|e-?mail|mail|umar|umra|age|dob|janam|birthday)\\b"
+    ].join("|"),
+    "i"
+  );
+
+function isProfileQuestion(text) {
+  return PROFILE_QUESTION_REGEX.test(String(text || ""));
+}
+
+function calculateAge(isoDob, now) {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoDob || ""));
+
+  if (!match) return null;
+
+  const today = now || new Date();
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  let age = today.getFullYear() - year;
+
+  if (
+    today.getMonth() + 1 < month ||
+    (today.getMonth() + 1 === month && today.getDate() < day)
+  ) {
+    age--;
+  }
+
+  return age >= 0 && age < 130 ? age : null;
+}
+
+// What is sent along with a chat message ({} for ordinary questions).
+function getProfileForApi(messageText) {
+  if (!isProfileQuestion(messageText)) return {};
+
+  const profile = { asked: true };
+
+  profile.accountType =
+    isGuest || !currentUser ? "guest" : "signed-in";
+
+  if (userProfile && userProfile.name) {
+    profile.name = userProfile.name;
+  }
+
+  const email = getAccountEmail();
+
+  if (email) profile.email = email;
+
+  if (userProfile && userProfile.dob) {
+    profile.dateOfBirth = userProfile.dob;
+
+    const age = calculateAge(userProfile.dob);
+
+    if (age !== null) profile.age = age;
+  }
+
+  return profile;
 }
 
 
@@ -2101,21 +3058,42 @@ function openLegalModal(type) {
    17c. SETTINGS PANEL
    ========================================================= */
 
+// The signed-in person's email. Some sign-in methods keep it only on
+// the provider record, so that is checked as a fallback.
+function getAccountEmail() {
+  if (isGuest || !currentUser) return "";
+
+  if (currentUser.email) return String(currentUser.email);
+
+  const providers =
+    Array.isArray(currentUser.providerData)
+      ? currentUser.providerData
+      : [];
+
+  const withEmail =
+    providers.find(p => p && p.email);
+
+  return withEmail ? String(withEmail.email) : "";
+}
+
 function updateSettingsPanel() {
   const loggedIn =
     !isGuest && !!currentUser;
+
+  const accountEmail =
+    getAccountEmail();
 
   // Email: shown (with "Click to copy") for signed-in users only.
   if (accountEmailBtn) {
     accountEmailBtn.classList.toggle(
       "hidden",
-      !loggedIn || !currentUser.email
+      !loggedIn || !accountEmail
     );
   }
 
   if (accountEmailValue) {
     accountEmailValue.textContent =
-      loggedIn ? (currentUser.email || "") : "";
+      accountEmail;
   }
 
   if (accountEmailHint) {
@@ -2213,6 +3191,9 @@ function loadMemoryLocal() {
     memoryItems = [];
     memoryEnabled = true;
   }
+
+  // chats may already be on screen: show / hide their bars to match
+  syncMemoryBars();
 }
 
 function saveMemoryLocal() {
@@ -2259,6 +3240,8 @@ async function loadMemoryFromFirestore() {
   } catch (error) {
     console.error("Memory load error:", error);
   }
+
+  syncMemoryBars();
 }
 
 async function saveMemoryToFirestore() {
@@ -2286,6 +3269,10 @@ async function saveMemoryToFirestore() {
 }
 
 function persistMemory() {
+  // The "Saved to memory" bars in the chat follow the memory list:
+  // delete a saved memory and its bar disappears with it.
+  syncMemoryBars();
+
   if (!isGuest && currentUser) {
     saveMemoryToFirestore();
   } else {
@@ -2501,32 +3488,84 @@ function hasPersonalContext() {
   }
 }
 
-function buildMemorySavedBar(facts, ids) {
-  const list =
-    Array.isArray(facts) ? facts : [];
+// The facts a message taught the AI that are STILL in saved memory.
+// (Entries the person deleted no longer count — so their bar goes too.)
+function getLiveSavedForMessage(chatId, createdAt) {
+  const result = { facts: [], ids: [] };
+
+  const chat = findChatById(chatId);
+
+  if (!chat) return result;
+
+  const message =
+    chat.messages.find(
+      m => m.role === "user" && m.createdAt === createdAt
+    );
+
+  if (
+    !message ||
+    !Array.isArray(message.memorySaved)
+  ) {
+    return result;
+  }
+
+  message.memorySaved.forEach((text, index) => {
+    const id =
+      Array.isArray(message.memorySavedIds)
+        ? message.memorySavedIds[index]
+        : null;
+
+    const entry =
+      memoryItems.find(item =>
+        id
+          ? item.id === id
+          : normalizeMemoryText(item.text) ===
+            normalizeMemoryText(text)
+      );
+
+    if (entry) {
+      result.facts.push(entry.text);
+
+      result.ids.push(entry.id);
+    }
+  });
+
+  return result;
+}
+
+// A quiet status line, styled like "Searching the web":
+//   [icon] Saved to memory  ›
+// One click opens the saved-memory panel.
+function buildMemorySavedBar(chatId, createdAt) {
+  const live =
+    getLiveSavedForMessage(chatId, createdAt);
+
+  if (!live.facts.length) return null;
 
   const bar =
-    document.createElement("div");
+    document.createElement("button");
+
+  bar.type = "button";
 
   bar.className = "memory-saved-bar";
 
-  bar.setAttribute("role", "button");
-  bar.tabIndex = 0;
+  bar.dataset.chat = String(chatId);
+
+  bar.dataset.created = String(createdAt);
 
   bar.title =
     "Saved to memory:\n• " +
-    list.join("\n• ") +
-    "\n\nClick to open your saved memory";
+    live.facts.join("\n• ") +
+    "\n\nClick to see your saved memory";
 
   const icon =
     document.createElement("span");
 
-  icon.className = "memory-saved-icon";
+  icon.className = "status-memory-icon";
 
-  // brain-style "memory" mark
   icon.innerHTML =
-    "<svg viewBox='0 0 24 24' width='16' height='16' " +
-    "fill='none' stroke='currentColor' stroke-width='2' " +
+    "<svg viewBox='0 0 24 24' width='14' height='14' " +
+    "fill='none' stroke='currentColor' stroke-width='1.6' " +
     "stroke-linecap='round' stroke-linejoin='round' " +
     "aria-hidden='true' focusable='false'>" +
     "<path d='M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z'></path>" +
@@ -2538,95 +3577,105 @@ function buildMemorySavedBar(facts, ids) {
 
   label.className = "memory-saved-label";
 
-  const title =
-    document.createElement("strong");
-
-  title.textContent = "Saved to memory";
-
-  const detail =
-    document.createElement("span");
-
-  detail.className = "memory-saved-detail";
-
-  detail.textContent =
-    list.join(" · ");
-
-  label.appendChild(title);
-  label.appendChild(detail);
+  label.textContent = "Saved to memory";
 
   const arrow =
     document.createElement("span");
 
   arrow.className = "memory-saved-arrow";
+
   arrow.setAttribute("aria-hidden", "true");
+
   arrow.textContent = "›";
 
   bar.appendChild(icon);
   bar.appendChild(label);
   bar.appendChild(arrow);
 
-  // The whole bar — logo included — opens the saved-memory panel.
-  const open = () => openMemoryPanel(ids);
-
-  bar.addEventListener("click", open);
-
-  bar.addEventListener("keydown", event => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-
-      open();
-    }
+  // Looked up again at click time, so it always shows what is
+  // really still saved.
+  bar.addEventListener("click", () => {
+    openMemoryPanel(
+      getLiveSavedForMessage(chatId, createdAt).ids
+    );
   });
 
   return bar;
 }
 
+// Makes every bar on screen match the memory list right now:
+// removes bars whose memories were deleted, adds bars that are
+// missing (for example after memory finished loading).
+function syncMemoryBars() {
+  if (!messages) return;
+
+  const chat = getCurrentChat();
+
+  if (!chat) return;
+
+  const userRows =
+    messages.querySelectorAll(".message-row.user");
+
+  userRows.forEach(userRow => {
+    const created =
+      Number(userRow.dataset && userRow.dataset.created);
+
+    if (!created) return;
+
+    const answerRow =
+      userRow.nextElementSibling;
+
+    if (
+      !answerRow ||
+      !answerRow.classList.contains("assistant") ||
+      answerRow.id === "assistantRevealTemp"
+    ) {
+      return;
+    }
+
+    const wrapper =
+      answerRow.querySelector(".message-wrapper");
+
+    if (!wrapper) return;
+
+    const existing =
+      wrapper.querySelector(".memory-saved-bar");
+
+    const live =
+      getLiveSavedForMessage(chat.id, created);
+
+    if (!live.facts.length) {
+      if (existing) existing.remove();
+
+      return;
+    }
+
+    if (existing) return;
+
+    const bar =
+      buildMemorySavedBar(chat.id, created);
+
+    if (!bar) return;
+
+    const actions =
+      wrapper.querySelector(".message-actions");
+
+    if (actions) {
+      wrapper.insertBefore(bar, actions);
+    } else {
+      wrapper.appendChild(bar);
+    }
+  });
+}
+
 // If the AI's answer is already on screen when the facts finish
-// saving, the bar slides in under it. (If the answer is still being
-// written, it simply appears when the answer is finished — the
-// facts are stored on the message, and renderMessage reads them.)
-function showMemorySavedBar(chatId, createdAt, facts, ids) {
-  if (chatId !== currentChatId || !messages) return;
+// saving, the bar appears under it. (If the answer is still being
+// written, the bar simply appears with the finished answer — the
+// facts are stored on the message and renderMessage reads them.)
+function showMemorySavedBar(chatId) {
+  if (chatId !== currentChatId) return;
 
-  const userRow =
-    messages.querySelector(
-      '.message-row.user[data-created="' + createdAt + '"]'
-    );
-
-  if (!userRow) return;
-
-  const answerRow =
-    userRow.nextElementSibling;
-
-  if (
-    !answerRow ||
-    !answerRow.classList.contains("assistant") ||
-    answerRow.id === "assistantRevealTemp"
-  ) {
-    return;
-  }
-
-  const wrapper =
-    answerRow.querySelector(".message-wrapper");
-
-  if (!wrapper) return;
-
-  const old =
-    wrapper.querySelector(".memory-saved-bar");
-
-  if (old) old.remove();
-
-  const bar =
-    buildMemorySavedBar(facts, ids);
-
-  const actions =
-    wrapper.querySelector(".message-actions");
-
-  if (actions) {
-    wrapper.insertBefore(bar, actions);
-  } else {
-    wrapper.appendChild(bar);
-  }
+  syncMemoryBars();
 
   scrollToBottomIfFollowing();
 }
@@ -2762,7 +3811,7 @@ async function learnFromUserMessage(text, chatId, createdAt) {
         saveChatToFirestore(latest);
       }
 
-      showMemorySavedBar(chatId, createdAt, added, addedIds);
+      showMemorySavedBar(chatId);
 
     } else {
       showToast("Saved to memory");
@@ -4761,12 +5810,16 @@ function renderMessage(
       Array.isArray(askedMessage.memorySaved) &&
       askedMessage.memorySaved.length
     ) {
-      wrapper.appendChild(
+      const memoryBar =
         buildMemorySavedBar(
-          askedMessage.memorySaved,
-          askedMessage.memorySavedIds
-        )
-      );
+          ownerChat.id,
+          askedMessage.createdAt
+        );
+
+      // null when every memory it saved has since been deleted
+      if (memoryBar) {
+        wrapper.appendChild(memoryBar);
+      }
     }
   }
 
@@ -5563,7 +6616,7 @@ async function generateAndAppendAssistantReply(
     // --- 1. Shared learned-answer cache (skipped on Regenerate,
     //        so a fresh real answer can be generated and relearned) ---
 
-    if (!skipCache) {
+    if (!skipCache && !isProfileQuestion(userText)) {
       const cached =
         await checkLearnedAnswer(userText);
 
@@ -6412,7 +7465,8 @@ async function streamAssistantMessage(userText, chatId) {
           message: userText,
           history: getRecentHistoryForApi(chatId),
           facts: getKnownFacts(),
-          memory: getMemoryForApi()
+          memory: getMemoryForApi(),
+          profile: getProfileForApi(userText)
         }),
         signal:
           abortController
@@ -7175,6 +8229,12 @@ function downloadTextFile(
 
 async function logout() {
   try {
+
+    // Leaving: forget unfinished onboarding progress and any
+    // half-finished email verification.
+    clearOnboardingDraft();
+
+    resetOtpState();
 
     if (unsubscribeChats) {
       unsubscribeChats();
@@ -8044,6 +9104,8 @@ async function startApp() {
 
   setupAccountSettings();
 
+  setupOtp();
+
   setupSuggestions();
 
   setupKeyboard();
@@ -8067,6 +9129,16 @@ async function startApp() {
 
     return;
   }
+
+  // If Firebase is very slow to answer, don't leave the splash up forever.
+  setTimeout(() => {
+    if (
+      bootSplash &&
+      !bootSplash.classList.contains("hidden")
+    ) {
+      showAuthScreen();
+    }
+  }, 8000);
 
   await checkRedirectLogin();
 
