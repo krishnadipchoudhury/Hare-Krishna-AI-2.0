@@ -6,6 +6,12 @@
     },
     "api/extract-memory.js": {
       "maxDuration": 15
+    },
+    "api/send-otp.js": {
+      "maxDuration": 15
+    },
+    "api/verify-otp.js": {
+      "maxDuration": 10
     }
   },
   "rewrites": [
