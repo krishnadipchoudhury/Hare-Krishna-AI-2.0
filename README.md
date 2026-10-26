@@ -62,16 +62,23 @@ LLM general knowledge (Groq) ──▶ answer from the model's own training
 
 ```
 .
-├── api/
-│   └── chat.js            # Serverless backend: knowledge search, web search, LLM streaming
+├── api/                       # Serverless functions (each file = one /api/... URL)
+│   ├── chat.js                # Answers: knowledge search, web search, LLM streaming
+│   ├── extract-memory.js      # Picks lasting facts out of a message for "Saved to memory"
+│   ├── send-otp.js            # Emails a 6-digit verification code
+│   └── verify-otp.js          # Checks the code the person typed
+├── lib/
+│   └── otp.js                 # Shared code for the two OTP endpoints (signing, limits, email sending)
 ├── knowledge/
-│   ├── knowledgeData.js   # Local knowledge base (identity, facts, etc.)
-│   └── math.js            # Built-in math solver
-├── app.js                 # Frontend app logic
-├── index.html              # App shell / markup
-├── style.css               # Styling
-├── privacy.html / terms.html
-├── vercel.json             # Vercel function config
+│   ├── knowledgeData.js       # Local knowledge base (identity, facts, etc.)
+│   └── math.js                # Built-in math solver
+├── app.js                     # Frontend app logic
+├── index.html                 # App shell / markup (login, OTP, onboarding, chat, settings)
+├── style.css                  # Styling
+├── terms.html / privacy.html  # Legal pages (also shown inside the app in a viewer)
+├── firestore.rules            # Firestore security rules — publish these in the Firebase Console
+├── .env.example               # The environment variables the backend needs
+├── vercel.json                # Vercel function settings + Firebase sign-in proxy
 └── package.json
 ```
 
@@ -95,12 +102,33 @@ The backend (`api/chat.js`) needs these set in your Vercel project (or a local `
 | `GROQ_API_KEY`      | LLM responses                 |
 | `TAVILY_API_KEY`    | Live web search                |
 | `JINA_API_KEY`      | Knowledge-base embeddings      |
+| `OTP_SECRET`        | Signs email-verification codes (any long random string, 32+ characters) |
+| `RESEND_API_KEY`    | Sends the verification email (from [resend.com](https://resend.com)) |
+| `OTP_FROM_EMAIL`    | The "from" address, e.g. `Hare Krishna AI <login@yourdomain.com>` |
 
 > Remember to add these under **both** the Production and Preview environments in Vercel, or preview deployments will fail to reach these services.
 
 Firebase configuration lives directly in `app.js` (`firebaseConfig`) since Firebase's client-side web keys are safe to expose publicly — access is controlled by your Firestore security rules, not by hiding the key.
 
-### 3. Deploy
+### 3. Email verification (OTP) setup
+
+New email accounts must type a 6-digit code that is emailed to them.
+
+1. Create a free account at [resend.com](https://resend.com) → **API Keys** → create a key → this is `RESEND_API_KEY`.
+2. Resend → **Domains** → add and verify your own domain (add the DNS records it shows). Then set `OTP_FROM_EMAIL` to an address on that domain, e.g. `Hare Krishna AI <login@yourdomain.com>`.
+   *Without a verified domain Resend only delivers to your own email address — fine for a first test, not for real users.*
+3. Make up a long random string for `OTP_SECRET` (for example, run `openssl rand -hex 32`).
+4. In Vercel → **Settings → Environment Variables**, add all three (Production **and** Preview), then **redeploy**.
+
+To turn the step off, set `REQUIRE_EMAIL_OTP = false` near the top of the account section in `app.js`.
+
+If creating an account says *"Email verification isn't available right now"*, one of the three variables is missing or the project has not been redeployed since adding them. The exact reason is in Vercel → **Logs** (search for `send-otp`).
+
+### 4. Firestore security rules
+
+Open `firestore.rules`, copy it all, and paste it in **Firebase Console → Firestore Database → Rules → Publish**. This is what keeps each person's name, email, date of birth and chats private to them.
+
+### 5. Deploy
 
 The project is set up for zero-config deployment on [Vercel](https://vercel.com) — connect the repo and it picks up `api/chat.js` and `vercel.json` automatically.
 
