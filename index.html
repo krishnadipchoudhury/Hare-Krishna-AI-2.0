@@ -14,6 +14,13 @@
 </head>
 
 <body>
+  <!-- Shown for a moment while the app checks whether you are already
+       signed in, so the login page never flashes for returning people. -->
+
+  <div id="bootSplash" class="boot-splash" aria-hidden="true">
+    <div class="auth-logo"><span>✦</span></div>
+  </div>
+
 
   <!-- =====================================================
        AUTHENTICATION SCREEN
@@ -210,7 +217,7 @@
           <input type="checkbox" id="onbTermsCheck">
           <span class="onb-check-text">
             I agree to the
-            <a href="terms.html" target="_blank" rel="noopener">Terms and Conditions</a>
+            <a id="onbTermsLink" href="terms.html" target="_blank" rel="noopener">Terms and Conditions</a>
           </span>
         </label>
 
@@ -218,7 +225,7 @@
           <input type="checkbox" id="onbPrivacyCheck">
           <span class="onb-check-text">
             I have read and accept the
-            <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+            <a id="onbPrivacyLink" href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
           </span>
         </label>
 
@@ -335,6 +342,93 @@
       </button>
 
     </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       EMAIL VERIFICATION (6-digit code sent to the new account's email)
+       ===================================================== -->
+
+  <div id="otpScreen" class="auth-screen otp-screen hidden">
+
+    <div class="auth-card otp-card">
+
+      <button id="otpBackBtn" class="otp-back" type="button" aria-label="Back">
+        ‹
+      </button>
+
+      <div class="otp-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none"
+             stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="5" width="18" height="14" rx="3"></rect>
+          <path d="m4 7 8 6 8-6"></path>
+        </svg>
+      </div>
+
+      <h1 class="auth-title">Verify your email</h1>
+
+      <p class="auth-subtitle">
+        We sent a 6-digit code to<br>
+        <strong id="otpEmailText"></strong>
+      </p>
+
+      <div id="otpBoxes" class="otp-boxes" role="group" aria-label="6-digit verification code"></div>
+
+      <p id="otpMessage" class="otp-message" role="status" aria-live="polite"></p>
+
+      <button id="otpVerifyBtn" class="auth-primary-btn" type="button" disabled>
+        Verify
+      </button>
+
+      <div class="otp-resend">
+        <span id="otpResendText">Didn't get the code?</span>
+        <button id="otpResendBtn" class="auth-link-btn" type="button" disabled>
+          Resend code
+        </button>
+      </div>
+
+      <button id="otpChangeEmailBtn" class="otp-change" type="button">
+        Wrong email? Change it
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- =====================================================
+       TERMS / PRIVACY VIEWER (opens on top of the app, so reading
+       them never takes the person away from where they were)
+       ===================================================== -->
+
+  <div
+    id="legalSheet"
+    class="legal-sheet hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="legalSheetTitle">
+
+    <div class="legal-sheet-bar">
+
+      <button id="legalSheetBack" class="name-edit-bar-btn" type="button">
+        ‹ Back
+      </button>
+
+      <h2 id="legalSheetTitle">Terms and Conditions</h2>
+
+      <a id="legalSheetOpen" class="legal-sheet-open" href="terms.html" target="_blank" rel="noopener">
+        Open ↗
+      </a>
+
+    </div>
+
+    <iframe
+      id="legalSheetFrame"
+      class="legal-sheet-frame"
+      title="Legal document"
+      src="about:blank"></iframe>
 
   </div>
 
